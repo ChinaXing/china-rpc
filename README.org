@@ -1,0 +1,34 @@
+* China-RPC
+
+make a rpc framework, just with elegant, concise design, extend ability.
+
+
+** Architecture
+*** Exporter
+导出服务——成为服务端
+*** Refer
+生成远程服务代理类
+*** Proxy
+代理远程过程调用
+*** Protocol
+远程过程调用的语义与约定
+*** Transport
+传输远程调用，实现跨主机通信的Channel
+
+** Features
+*** config
+    - with xml
+    - with programming  
+*** Service provider auto explore
+    - by redis
+    - by zk
+    - by database
+*** Cluster Call
+    集群调用，选择服务提供者之一完成调用
+*** BroadCast Call
+    广播调用，返回每个调用者的结果
+*** Appoint Call
+    指定目标服务提供者的地址进行调用
+    
+
+
