@@ -4,11 +4,19 @@ make a rpc framework, just with elegant, concise design, extend ability.
 
 
 ** Architecture
+   #+BEGIN_EXAMPLE
+   代理层：   CallerStub                  CalleeStub
+   ------------------------------------------------------
+   协议层：   Protocol                    Protocol
+   ------------------------------------------------------
+   传输层：   Transport   <----------->   Transport
+   ------------------------------------------------------
+   #+END_EXAMPLE
 *** Exporter
 导出服务——成为服务端
 *** Refer
 生成远程服务代理类
-*** Proxy
+*** Stub
 代理远程过程调用
 *** Protocol
 远程过程调用的语义与约定
