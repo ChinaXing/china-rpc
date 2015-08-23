@@ -1,10 +1,8 @@
 package com.chinaxing.framework.rpc;
 
-import com.chinaxing.framework.rpc.model.ServiceInfo;
 import com.chinaxing.framework.rpc.stub.ServiceProvider;
 
 import java.util.ArrayList;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 

@@ -1,5 +1,4 @@
 import com.chinaxing.framework.rpc.ChinaRPC;
-import com.chinaxing.framework.rpc.model.ServiceInfo;
 import org.junit.Test;
 
 /**

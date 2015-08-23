@@ -1,6 +1,5 @@
 package com.chinaxing.framework.rpc;
 
-import com.chinaxing.framework.rpc.model.ServiceInfo;
 import com.chinaxing.framework.rpc.stub.CalleeStub;
 import com.chinaxing.framework.rpc.stub.CallerStub;
 import com.chinaxing.framework.rpc.stub.ServiceProvider;

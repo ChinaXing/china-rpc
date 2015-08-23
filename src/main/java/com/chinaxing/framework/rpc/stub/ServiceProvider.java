@@ -1,7 +1,5 @@
 package com.chinaxing.framework.rpc.stub;
 
-import com.chinaxing.framework.rpc.model.ServiceInfo;
-
 import java.util.List;
 import java.util.Map;
 
