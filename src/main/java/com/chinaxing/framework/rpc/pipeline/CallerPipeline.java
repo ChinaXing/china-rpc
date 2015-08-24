@@ -6,6 +6,8 @@ import com.chinaxing.framework.rpc.model.EventContext;
 import com.chinaxing.framework.rpc.model.PacketEvent;
 import com.chinaxing.framework.rpc.protocol.ProtocolHandler;
 import com.chinaxing.framework.rpc.stub.CallerStub;
+import com.chinaxing.framework.rpc.transport.LoadBalance;
+import com.chinaxing.framework.rpc.transport.RRLoadBalance;
 import com.chinaxing.framework.rpc.transport.TransportHandler;
 import com.lmax.disruptor.EventFactory;
 import com.lmax.disruptor.EventHandler;
@@ -14,6 +16,7 @@ import com.lmax.disruptor.dsl.Disruptor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
 import java.util.concurrent.Executor;
 
 /**
@@ -27,16 +30,17 @@ import java.util.concurrent.Executor;
  * <p/>
  * Created by LambdaCat on 15/8/21.
  */
-public class CallerPipeline {
+public class CallerPipeline implements Pipeline<PacketEvent, CallRequestEvent> {
     private static final Logger logger = LoggerFactory.getLogger(CallerPipeline.class);
     private final Executor executor;
     private final int capacity;
+    private final LoadBalance loadBalance;
     private Disruptor<CallRequestEvent> callRequestEventDisruptor;
     private Disruptor<PacketEvent> downStreamPacketEventDisruptor;
     private Disruptor<PacketEvent> upStreamPacketEventDisruptor;
     private Disruptor<CallResponseEvent> callResponseEventDisruptor;
     private ProtocolHandler protocolHandler = new ProtocolHandler();
-    private TransportHandler transportHandler = new TransportHandler();
+    private TransportHandler transportHandler = new TransportHandler(this);
     private CallerStub stub;
     private RingBuffer<CallRequestEvent> callRequestEventRingBuffer;
     private RingBuffer<PacketEvent> downStreamPacketEventRingBuffer;
@@ -44,12 +48,15 @@ public class CallerPipeline {
     private RingBuffer<CallResponseEvent> callResponseEventRingBuffer;
 
 
-    public CallerPipeline(Executor executor, int capacity, CallerStub stub) {
+    public CallerPipeline(Executor executor, int capacity, LoadBalance loadBalance) {
         this.executor = executor;
         this.capacity = capacity;
-        this.stub = stub;
-
+        this.loadBalance = loadBalance;
         init();
+    }
+
+    public void setStub(CallerStub stub) {
+        this.stub = stub;
     }
 
     private void init() {
@@ -112,11 +119,12 @@ public class CallerPipeline {
 
     }
 
-    public void start() {
+    public void start() throws IOException {
         callRequestEventRingBuffer = callRequestEventDisruptor.start();
         callResponseEventRingBuffer = callResponseEventDisruptor.start();
         upStreamPacketEventRingBuffer = upStreamPacketEventDisruptor.start();
         downStreamPacketEventRingBuffer = downStreamPacketEventDisruptor.start();
+        transportHandler.startClient(loadBalance);
     }
 
     public EventContext<PacketEvent> up() {

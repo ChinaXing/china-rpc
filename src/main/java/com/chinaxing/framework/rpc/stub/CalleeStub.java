@@ -4,6 +4,11 @@ import com.chinaxing.framework.rpc.ChinaRPC;
 import com.chinaxing.framework.rpc.Promise;
 import com.chinaxing.framework.rpc.RemoteCallPromise;
 import com.chinaxing.framework.rpc.model.CallRequestEvent;
+import com.chinaxing.framework.rpc.model.CallResponseEvent;
+import com.chinaxing.framework.rpc.model.EventContext;
+import com.chinaxing.framework.rpc.pipeline.CalleePipeline;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
@@ -21,6 +26,14 @@ import java.util.concurrent.atomic.AtomicInteger;
  * Created by LambdaCat on 15/8/20.
  */
 public class CalleeStub {
+    private static final Logger logger = LoggerFactory.getLogger(CalleeStub.class);
+    private final ConcurrentHashMap<Class, Object> exportMap = new ConcurrentHashMap<Class, Object>();
+    private final CalleePipeline pipeline;
+
+    public CalleeStub(CalleePipeline pipeline) {
+        this.pipeline = pipeline;
+    }
+
     /**
      * 导出服务
      *
@@ -29,7 +42,7 @@ public class CalleeStub {
      * @param <T>
      */
     public <T> void export(Class<T> clz, T instance) {
-
+        exportMap.put(clz, instance);
     }
 
     /**
@@ -40,10 +53,34 @@ public class CalleeStub {
      * @param <T>
      */
     public <T> void export(T instance) {
-
+        for (Class c : instance.getClass().getInterfaces())
+            exportMap.put(c, instance);
     }
 
     public void call(CallRequestEvent event) {
-
+        if (event.getException() != null) {
+            logger.error("call exception : ", event.getException());
+            return;
+        }
+        Class clz = event.getClz();
+        Object invoked = exportMap.get(clz);
+        EventContext<CallResponseEvent> ev = pipeline.down();
+        CallResponseEvent e = ev.getEvent();
+        e.setDestination(event.getDestination());
+        e.setId(event.getId());
+        if (invoked == null) {
+            e.setValue(new Exception("Remote Service Not Found ! :" + clz.getName()));
+            pipeline.publish(ev);
+            return;
+        }
+        Method m = event.getMethod();
+        Object[] argument = event.getArguments();
+        try {
+            Object result = m.invoke(invoked, argument);
+            e.setValue(result);
+        } catch (Exception ex) {
+            e.setValue(ex);
+        }
+        pipeline.publish(ev);
     }
 }

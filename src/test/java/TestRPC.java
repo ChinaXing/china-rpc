@@ -7,9 +7,9 @@ import org.junit.Test;
 public class TestRPC {
     @Test
     public void testClusterCall() {
-        ChinaRPC rpc = ChinaRPC.getBuilder().addProvider(TimeService.class.getName(), "127.0.0.1").setTimeout(5000).build();
-        rpc.export(new TimeServiceImpl());
+        ChinaRPC rpc = ChinaRPC.getBuilder().addProvider(TimeService.class.getName(), "127.0.0.1:9119").setTimeout(100000).build();
         try {
+            rpc.export(new TimeServiceImpl());
             TimeService ts = rpc.refer(TimeService.class);
             System.out.println(ts.getDate());
             System.out.println(ts.getTimestamp());
@@ -21,10 +21,10 @@ public class TestRPC {
     @Test
     public void testAppointCall() {
         ChinaRPC rpc = ChinaRPC.getBuilder().addProvider(
-                TimeService.class.getName(), "127.0.0.1").setTimeout(5000).build();
-        rpc.export(new TimeServiceImpl());
+                TimeService.class.getName(), "127.0.0.1:9119").setTimeout(5000).build();
         try {
-            TimeService ts = rpc.appointRefer(TimeService.class, "127.0.0.1");
+            rpc.export(new TimeServiceImpl());
+            TimeService ts = rpc.appointRefer(TimeService.class, "127.0.0.1:9119");
             System.out.println(ts.getDate());
             System.out.println(ts.getTimestamp());
         } catch (Throwable t) {

@@ -1,9 +1,11 @@
 package com.chinaxing.framework.rpc.protocol;
 
 import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
 import java.nio.ByteBuffer;
-import java.util.HashMap;
-import java.util.Map;
+import java.text.DateFormat;
+import java.text.SimpleDateFormat;
+import java.util.*;
 
 /**
  * 序列化反序列化工具
@@ -12,16 +14,18 @@ import java.util.Map;
  * 1. 支持generic
  * 2. 支持注解
  * 3. 支持transient
- * 4. 去除static
  * <p/>
  * Created by LambdaCat on 15/8/23.
  */
 public class ChinaSerialize {
     private static Map<Class, Integer> classCode = new HashMap<Class, Integer>();
     private static Class[] classIndex = new Class[]{
-            int.class, byte.class, char.class, short.class, double.class, float.class, boolean.class,
-            Integer.class, Byte.class, Character.class, Short.class, Double.class, Float.class, Boolean.class, String.class
+            int.class, byte.class, char.class, short.class, double.class, float.class, boolean.class, long.class,
+            Integer.class, Byte.class, Character.class, Short.class, Double.class, Float.class, Long.class, Boolean.class,
+            String.class, Date.class
     };
+
+    private static final DateFormat dateFormat = new SimpleDateFormat();
 
     static {
         for (int i = 0; i < classIndex.length; i++) {
@@ -71,6 +75,10 @@ public class ChinaSerialize {
                 buffer.putShort(((Short) obj).shortValue());
                 return;
             }
+            if (clz.equals(long.class) || clz.equals(Long.class)) {
+                buffer.putLong(((Long) obj).longValue());
+                return;
+            }
             if (clz.equals(double.class) || clz.equals(Double.class)) {
                 buffer.putDouble(((Double) obj).doubleValue());
                 return;
@@ -87,6 +95,12 @@ public class ChinaSerialize {
                 byte[] sb = ((String) obj).getBytes();
                 buffer.putInt(sb.length);
                 buffer.put(sb);
+                return;
+            }
+            if (clz.equals(Date.class)) {
+                byte[] s = dateFormat.format((Date) obj).getBytes();
+                buffer.putInt(s.length);
+                buffer.put(s);
                 return;
             }
         }
@@ -116,8 +130,18 @@ public class ChinaSerialize {
          */
         Class objClz = obj.getClass();
         Field[] fields = objClz.getDeclaredFields();
-        buffer.putInt(fields.length);
+        List<Field> fieldList = new ArrayList<Field>();
+        /**
+         * 去掉静态域
+         */
         for (Field f : fields) {
+            if (Modifier.isStatic(f.getModifiers())) {
+                continue;
+            }
+            fieldList.add(f);
+        }
+        buffer.putInt(fieldList.size());
+        for (Field f : fieldList) {
             try {
                 Object of;
                 if (!f.isAccessible()) {
@@ -159,7 +183,14 @@ public class ChinaSerialize {
                 int fl = buffer.getInt();
                 for (int i = 0; i < fl; i++) {
                     DeSerializeResult dp = deserialize(buffer);
-                    clz.getDeclaredField(dp.name).set(obj, dp.value);
+                    Field f = clz.getDeclaredField(dp.name);
+                    if (f.isAccessible()) {
+                        f.set(obj, dp.value);
+                    } else {
+                        f.setAccessible(true);
+                        f.set(obj, dp.value);
+                        f.setAccessible(false);
+                    }
                 }
                 return new DeSerializeResult(name, obj);
             }
@@ -176,6 +207,9 @@ public class ChinaSerialize {
             if (clz.equals(short.class) || clz.equals(Short.class)) {
                 return new DeSerializeResult(name, buffer.getShort());
             }
+            if (clz.equals(long.class) || clz.equals(Long.class)) {
+                return new DeSerializeResult(name, buffer.getLong());
+            }
             if (clz.equals(double.class) || clz.equals(Double.class)) {
                 return new DeSerializeResult(name, buffer.getDouble());
             }
@@ -190,6 +224,12 @@ public class ChinaSerialize {
                 byte[] sb = new byte[sbl];
                 buffer.get(sb);
                 return new DeSerializeResult(name, new String(sb));
+            }
+            if (clz.equals(Date.class)) {
+                int sbl = buffer.getInt();
+                byte[] sb = new byte[sbl];
+                buffer.get(sb);
+                return new DeSerializeResult(name, dateFormat.parse(new String(sb)));
             }
         } catch (Exception e) {
             e.printStackTrace();

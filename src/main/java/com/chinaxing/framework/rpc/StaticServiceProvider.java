@@ -3,6 +3,7 @@ package com.chinaxing.framework.rpc;
 import com.chinaxing.framework.rpc.stub.ServiceProvider;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -10,7 +11,7 @@ import java.util.Map;
  * Created by LambdaCat on 15/8/20.
  */
 public class StaticServiceProvider implements ServiceProvider {
-    private Map<String, List<String>> providers;
+    private final Map<String, List<String>> providers = new HashMap<String, List<String>>();
 
     public Map<String, List<String>> getProvider() {
         return providers;

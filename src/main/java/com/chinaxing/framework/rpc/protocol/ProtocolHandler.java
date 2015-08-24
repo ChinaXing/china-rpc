@@ -40,14 +40,31 @@ public class ProtocolHandler {
             ChinaSerialize.serialize("$" + i, o, buffer);
             ++i;
         }
+        event.setDestination(requestEvent.getDestination());
+        event.setAvailableDestinations(requestEvent.getAvailableDestinations());
+        buffer.flip();
         event.setBuffer(buffer);
     }
 
     public void handleCallerUpstream(PacketEvent packetEvent, CallResponseEvent responseEvent) {
+        /**
+         *发送请求失败
+         *
+         * 发生得原因：
+         * 1. 发送由于网络等原因失败，未能发送到对方
+         *
+         * 处理策略：
+         * 1. 上层对上层应用返回Null，同时打印出错误日志和堆栈
+         */
+        if (packetEvent.getException() != null) {
+            responseEvent.setException(packetEvent.getException());
+            return;
+        }
         ByteBuffer buffer = packetEvent.getBuffer();
         int id = buffer.getInt();
         ChinaSerialize.DeSerializeResult dr = ChinaSerialize.deserialize(buffer);
         responseEvent.setId(id);
+        responseEvent.setDestination(packetEvent.getDestination());
         responseEvent.setValue(dr.value);
 
     }
@@ -56,10 +73,22 @@ public class ProtocolHandler {
         ByteBuffer buffer = ByteBuffer.allocateDirect(1024);
         buffer.putInt(responseEvent.getId());
         ChinaSerialize.serialize("result", responseEvent.getValue(), buffer);
+        buffer.flip();
         event.setBuffer(buffer);
+        event.setDestination(responseEvent.getDestination());
     }
 
     public void handleCalleeUpstream(PacketEvent packetEvent, CallRequestEvent requestEvent) {
+        /**
+         * 调用回应出错（网络失败等发送应答给对方失败）
+         *
+         * 服务端上层的处理策略：
+         * 1. 打印日志，客户端将会超时
+         */
+        if (packetEvent.getException() != null) {
+            requestEvent.setException(packetEvent.getException());
+            return;
+        }
         try {
             ByteBuffer buffer = packetEvent.getBuffer();
             int id = buffer.getInt();
@@ -82,8 +111,10 @@ public class ProtocolHandler {
                 argCls[i] = aC;
             }
             Method method = clz.getMethod(methodName, argCls);
+            requestEvent.setId(id);
             requestEvent.setClz(clz);
             requestEvent.setMethod(method);
+            requestEvent.setDestination(packetEvent.getDestination());
             // parse arguments
             int al = buffer.getInt();
             Object[] args = new Object[al];

@@ -6,6 +6,8 @@ package com.chinaxing.framework.rpc.model;
 public class CallResponseEvent {
     private int id;
     private Object value;
+    private String destination;
+    private Exception exception;
 
     public int getId() {
         return id;
@@ -21,5 +23,21 @@ public class CallResponseEvent {
 
     public void setValue(Object value) {
         this.value = value;
+    }
+
+    public String getDestination() {
+        return destination;
+    }
+
+    public void setDestination(String destination) {
+        this.destination = destination;
+    }
+
+    public Exception getException() {
+        return exception;
+    }
+
+    public void setException(Exception exception) {
+        this.exception = exception;
     }
 }

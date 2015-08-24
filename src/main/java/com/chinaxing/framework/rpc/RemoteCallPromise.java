@@ -1,5 +1,6 @@
 package com.chinaxing.framework.rpc;
 
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -14,21 +15,18 @@ public class RemoteCallPromise<V> implements Promise<V> {
     private volatile V data;
     private volatile String reason;
     private volatile Thread t;
+    private CountDownLatch latch = new CountDownLatch(1);
 
     public void setSuccess(V v) {
         isDone = true;
         data = v;
-        synchronized (this) {
-            notifyAll();
-        }
+        latch.countDown();
     }
 
     public void setFailure(String reason) {
         isFailure = true;
         this.reason = reason;
-        synchronized (this) {
-            notifyAll();
-        }
+        latch.countDown();
     }
 
     public boolean cancel(boolean mayInterruptIfRunning) {
@@ -53,9 +51,7 @@ public class RemoteCallPromise<V> implements Promise<V> {
     public V get() throws InterruptedException, ExecutionException {
         if (isDone) return data;
         if (isFailure || isCancelled) return null;
-        synchronized (this) {
-            wait();
-        }
+        latch.await();
         if (isDone) return data;
         return null;
     }
@@ -63,11 +59,9 @@ public class RemoteCallPromise<V> implements Promise<V> {
     public V get(long timeout, TimeUnit unit) throws InterruptedException, ExecutionException, TimeoutException {
         if (isDone) return data;
         if (isFailure || isCancelled) return null;
-        synchronized (this) {
-            wait(timeout);
-        }
+        latch.await(timeout, unit);
         if (isDone) return data;
         if (isCancelled || isFailure) return null;
-        throw new TimeoutException();
+        throw new TimeoutException(timeout + " " + unit);
     }
 }

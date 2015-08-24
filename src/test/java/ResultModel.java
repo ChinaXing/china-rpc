@@ -5,6 +5,9 @@ public class ResultModel {
     private boolean ok;
     private String msg;
 
+    public ResultModel() {
+    }
+
     public ResultModel(boolean ok, String msg) {
         this.ok = ok;
         this.msg = msg;
