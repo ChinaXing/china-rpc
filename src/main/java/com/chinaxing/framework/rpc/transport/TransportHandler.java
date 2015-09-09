@@ -95,7 +95,7 @@ public class TransportHandler {
                             }
                         }
                     }
-                } catch (Exception e) {
+                } catch (Throwable e) {
                     logger.error("", e);
                     key.cancel();
                     try {

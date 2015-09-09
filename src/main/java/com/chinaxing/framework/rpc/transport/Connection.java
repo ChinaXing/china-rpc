@@ -136,11 +136,21 @@ public class Connection {
 
         public synchronized void start() throws IOException {
             if (start) return;
-            selector = Selector.open();
-            channel.configureBlocking(false);
-            key = channel.register(selector, SelectionKey.OP_READ | SelectionKey.OP_WRITE);
-            start = true;
-            executor.execute(this);
+            try {
+                selector = Selector.open();
+                if (channel == null)
+                    channel = SocketChannel.open(new InetSocketAddress(host, port));
+                channel.configureBlocking(false);
+                key = channel.register(selector, SelectionKey.OP_READ | SelectionKey.OP_WRITE);
+                start = true;
+                executor.execute(this);
+            } catch (Throwable e) {
+                logger.error("", e);
+                if (selector.isOpen()) {
+                    selector.close();
+                }
+                start = false;
+            }
         }
 
         public boolean send(ByteBuffer buffer) throws IOException {

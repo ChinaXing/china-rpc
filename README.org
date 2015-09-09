@@ -37,6 +37,9 @@ make a rpc framework, just with elegant, concise design, extend ability.
     广播调用，返回每个调用者的结果
 *** Appoint Call
     指定目标服务提供者的地址进行调用
+
+** TODO
+- IO Channel 复用线程，目前一个连接一个线程，连接多的时候不正确
     
 
 
