@@ -106,6 +106,7 @@ public class ProtocolHandler {
             for (int i = 0; i < pl; i++) {
                 int aCL = buffer.getInt();
                 byte[] aCB = new byte[aCL];
+                buffer.get(aCB);
                 String aCN = new String(aCB);
                 Class aC = Class.forName(aCN);
                 argCls[i] = aC;
