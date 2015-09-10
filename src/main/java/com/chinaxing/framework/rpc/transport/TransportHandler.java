@@ -86,8 +86,7 @@ public class TransportHandler {
             public void run() {
                 try {
                     while (true) {
-                        int c = selector.select(500);
-                        if (c == 0) continue;
+                        selector.select();
                         Set<SelectionKey> ks = selector.selectedKeys();
                         for (SelectionKey k : ks) {
                             if (k.isAcceptable()) {
