@@ -86,6 +86,11 @@ public class TransportHandler {
             public void run() {
                 try {
                     while (true) {
+                        /**
+                         * server socket select will return become ready count, always 0
+                         *
+                         * so should not to check return count to determinate ready state.
+                         */
                         selector.select();
                         Set<SelectionKey> ks = selector.selectedKeys();
                         for (SelectionKey k : ks) {
