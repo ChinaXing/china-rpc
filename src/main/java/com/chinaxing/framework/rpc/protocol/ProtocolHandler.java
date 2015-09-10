@@ -6,6 +6,8 @@ import com.chinaxing.framework.rpc.model.PacketEvent;
 
 import java.lang.reflect.Method;
 import java.nio.ByteBuffer;
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * 协议层处理器
@@ -16,6 +18,19 @@ import java.nio.ByteBuffer;
  * Created by LambdaCat on 15/8/22.
  */
 public class ProtocolHandler {
+    private static final Map<String, Class> primitiveClassNameMap = new HashMap<String, Class>();
+
+    static {
+        primitiveClassNameMap.put("long", long.class);
+        primitiveClassNameMap.put("int", int.class);
+        primitiveClassNameMap.put("short", short.class);
+        primitiveClassNameMap.put("double", double.class);
+        primitiveClassNameMap.put("float", float.class);
+        primitiveClassNameMap.put("char", char.class);
+        primitiveClassNameMap.put("byte", byte.class);
+        primitiveClassNameMap.put("boolean", boolean.class);
+    }
+
     public void handleCallerDownStream(CallRequestEvent requestEvent, PacketEvent event) {
         ByteBuffer buffer = ByteBuffer.allocateDirect(1024);
         buffer.putInt(requestEvent.getId());
@@ -108,7 +123,7 @@ public class ProtocolHandler {
                 byte[] aCB = new byte[aCL];
                 buffer.get(aCB);
                 String aCN = new String(aCB);
-                Class aC = Class.forName(aCN);
+                Class aC = getClass(aCN);
                 argCls[i] = aC;
             }
             Method method = clz.getMethod(methodName, argCls);
@@ -127,5 +142,13 @@ public class ProtocolHandler {
         } catch (Exception e) {
             e.printStackTrace();
         }
+    }
+
+    private static Class getClass(String name) throws ClassNotFoundException {
+        Class c = primitiveClassNameMap.get(name);
+        if (c == null) {
+            return Class.forName(name);
+        }
+        return c;
     }
 }
