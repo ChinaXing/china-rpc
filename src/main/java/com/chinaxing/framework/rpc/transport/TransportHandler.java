@@ -23,6 +23,8 @@ import java.util.concurrent.LinkedBlockingQueue;
  * 采用NIO，Selector，服务端采用actor模型
  * 1. Acceptor 一个线程
  * 2. 每个connection 分配一个进程（connection不会太多，所以还好）
+ * <p/>
+ * todo 增加发送重试
  * Created by LambdaCat on 15/8/21.
  */
 public class TransportHandler {
@@ -61,9 +63,10 @@ public class TransportHandler {
                 return;
             } catch (Exception e) {
                 logger.error("", e);
-//                EventContext<PacketEvent> ev = pipeline.up();
-//                ev.getEvent().setException(e);
-//                pipeline.publish(ev);
+                EventContext<PacketEvent> ev = pipeline.up();
+                ev.getEvent().setException(e);
+                pipeline.publish(ev);
+                return;
             }
         }
     }
