@@ -52,11 +52,15 @@ public class ChinaSerialize {
      * @param buffer
      */
     public static void serialize(String name, Object obj, ByteBuffer buffer) {
-        Class clz = obj.getClass();
-        Integer index = classCode.get(clz);
         byte[] nameByte = name.getBytes();
         buffer.putInt(nameByte.length);
         buffer.put(nameByte);
+        if (obj == null) {
+            buffer.putInt(-1);
+            return;
+        }
+        Class clz = obj.getClass();
+        Integer index = classCode.get(clz);
         if (index != null) {
             buffer.putInt(index);
             if (clz.equals(int.class) || clz.equals(Integer.class)) {
@@ -165,6 +169,9 @@ public class ChinaSerialize {
             buffer.get(nameByte);
             String name = new String(nameByte);
             int code = buffer.getInt();
+            if (code == -1) {
+                return new DeSerializeResult(name, null);
+            }
             if (code == 0) { // 数组
                 int al = buffer.getInt();
                 Object[] a = new Object[al];
