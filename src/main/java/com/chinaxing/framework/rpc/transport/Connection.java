@@ -221,6 +221,13 @@ public class Connection {
                 } catch (Exception e2) {
                     logger.error("", e2);
                 }
+            } catch (Throwable t) {
+                logger.error("exception", t);
+                try {
+                    close();
+                } catch (Exception e2) {
+                    logger.error("", e2);
+                }
             }
         }
 

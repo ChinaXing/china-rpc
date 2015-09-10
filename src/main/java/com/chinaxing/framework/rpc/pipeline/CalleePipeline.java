@@ -1,5 +1,6 @@
 package com.chinaxing.framework.rpc.pipeline;
 
+import com.chinaxing.framework.rpc.DefaultExceptionHandler;
 import com.chinaxing.framework.rpc.model.CallRequestEvent;
 import com.chinaxing.framework.rpc.model.CallResponseEvent;
 import com.chinaxing.framework.rpc.model.EventContext;
@@ -10,6 +11,7 @@ import com.chinaxing.framework.rpc.transport.ConnectionManager;
 import com.chinaxing.framework.rpc.transport.TransportHandler;
 import com.lmax.disruptor.EventFactory;
 import com.lmax.disruptor.EventHandler;
+import com.lmax.disruptor.ExceptionHandler;
 import com.lmax.disruptor.RingBuffer;
 import com.lmax.disruptor.dsl.Disruptor;
 import org.slf4j.Logger;
@@ -86,6 +88,10 @@ public class CalleePipeline implements Pipeline<PacketEvent, CallResponseEvent> 
             }
         }, capacity, executor);
 
+        callRequestEventDisruptor.handleExceptionsWith(new DefaultExceptionHandler<CallRequestEvent>(callRequestEventDisruptor));
+        downStreamPacketEventDisruptor.handleExceptionsWith(new DefaultExceptionHandler<PacketEvent>(downStreamPacketEventDisruptor));
+        callResponseEventDisruptor.handleExceptionsWith(new DefaultExceptionHandler<CallResponseEvent>(callResponseEventDisruptor));
+        upStreamPacketEventDisruptor.handleExceptionsWith(new DefaultExceptionHandler<PacketEvent>(upStreamPacketEventDisruptor));
 
         // chain together
 

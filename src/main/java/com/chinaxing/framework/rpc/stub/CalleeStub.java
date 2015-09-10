@@ -63,6 +63,10 @@ public class CalleeStub {
             return;
         }
         Class clz = event.getClz();
+        if (clz == null) {
+            logger.error("Clz is NULL :{}", event);
+            return;
+        }
         Object invoked = exportMap.get(clz);
         EventContext<CallResponseEvent> ev = pipeline.down();
         CallResponseEvent e = ev.getEvent();
