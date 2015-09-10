@@ -209,6 +209,11 @@ public class Connection {
                 }
             } catch (ClosedSelectorException e) {
                 logger.error("Closed Selector", e);
+                try {
+                    close();
+                } catch (Exception e2) {
+                    logger.error("", e2);
+                }
             } catch (IOException e) {
                 logger.error("", e);
                 try {
