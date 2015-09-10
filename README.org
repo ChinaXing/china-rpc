@@ -38,7 +38,7 @@ make a rpc framework, just with elegant, concise design, extend ability.
 *** Appoint Call
     指定目标服务提供者的地址进行调用
 
-** TODO
+** TODO-List
 - 多IO Channel 复用线程，目前一个连接一个线程，连接多的时候这种方式不正确
 - Buffer 分配采用启发式算法
 - 解析Call请求报文支持累积——支持tcp报文分段达到的合并——参考Netty的ByteToMessageDecoder
