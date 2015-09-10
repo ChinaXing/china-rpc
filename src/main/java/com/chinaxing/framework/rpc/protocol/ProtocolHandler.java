@@ -138,7 +138,7 @@ public class ProtocolHandler {
                 ChinaSerialize.DeSerializeResult dr = ChinaSerialize.deserialize(buffer);
                 args[i] = dr.value;
             }
-            requestEvent.setArguments(argCls);
+            requestEvent.setArguments(args);
         } catch (Exception e) {
             e.printStackTrace();
         }
