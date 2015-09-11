@@ -209,10 +209,10 @@ public class Connection {
         public synchronized void close() {
             try {
                 start = false;
-                if (channel != null)
+                if (channel != null) {
                     channel.close();
-                else
                     channel = null;
+                }
                 if (key.isConnectable())
                     key.cancel();
                 if (selector.isOpen())
