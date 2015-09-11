@@ -1,5 +1,7 @@
 package com.chinaxing.framework.rpc.protocol;
 
+import com.sun.corba.se.impl.ior.OldJIDLObjectKeyTemplate;
+
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 import java.nio.ByteBuffer;
@@ -18,6 +20,8 @@ import java.util.*;
  * Created by LambdaCat on 15/8/23.
  */
 public class ChinaSerialize {
+    private static final int NULL = -1, ENUM = 0, ARRAY = 1, OBJECT = 2;
+    private static final int SHIFT = 4;
     private static Map<Class, Integer> classCode = new HashMap<Class, Integer>();
     private static Class[] classIndex = new Class[]{
             int.class, byte.class, char.class, short.class, double.class, float.class, boolean.class, long.class,
@@ -29,7 +33,7 @@ public class ChinaSerialize {
 
     static {
         for (int i = 0; i < classIndex.length; i++) {
-            classCode.put(classIndex[i], i + 2);
+            classCode.put(classIndex[i], i + SHIFT);
         }
     }
 
@@ -56,7 +60,7 @@ public class ChinaSerialize {
         buffer.putInt(nameByte.length);
         buffer.put(nameByte);
         if (obj == null) {
-            buffer.putInt(-1);
+            buffer.putInt(NULL);
             return;
         }
         Class clz = obj.getClass();
@@ -111,11 +115,28 @@ public class ChinaSerialize {
 
 
         /**
+         * 枚举
+         */
+        if (clz.isEnum()) {
+            buffer.putInt(ENUM);
+            String clzName = clz.getName();
+            byte[] clzNameByte = clzName.getBytes();
+            buffer.putInt(clzNameByte.length);
+            buffer.put(clzNameByte);
+            String en = ((Enum) obj).name();
+            byte[] enB = en.getBytes();
+            buffer.putInt(enB.length);
+            buffer.put(enB);
+            return;
+        }
+
+
+        /**
          * 非原始类型
          */
 
         if (clz.isArray()) {
-            buffer.putInt(0);
+            buffer.putInt(ARRAY);
             buffer.putInt(((Object[]) obj).length);
             for (int i = 0; i < ((Object[]) obj).length; i++) {
                 serialize(String.valueOf(i), ((Object[]) obj)[i], buffer);
@@ -124,7 +145,7 @@ public class ChinaSerialize {
         }
 
 
-        buffer.putInt(1);
+        buffer.putInt(OBJECT);
         String clzName = clz.getName();
         byte[] clzNameByte = clzName.getBytes();
         buffer.putInt(clzNameByte.length);
@@ -169,10 +190,21 @@ public class ChinaSerialize {
             buffer.get(nameByte);
             String name = new String(nameByte);
             int code = buffer.getInt();
-            if (code == -1) {
+            if (code == NULL) {
                 return new DeSerializeResult(name, null);
             }
-            if (code == 0) { // 数组
+            if (code == ENUM) {
+                len = buffer.getInt();
+                byte[] clzByte = new byte[len];
+                buffer.get(clzByte);
+                Class clz = Class.forName(new String(clzByte));
+                int enL = buffer.getInt();
+                byte[] enB = new byte[enL];
+                buffer.get(enB);
+                String en = new String(enB);
+                return new DeSerializeResult(name, Enum.valueOf(clz, en));
+            }
+            if (code == ARRAY) { // 数组
                 int al = buffer.getInt();
                 Object[] a = new Object[al];
                 for (int i = 0; i < al; i++) {
@@ -181,7 +213,7 @@ public class ChinaSerialize {
                 }
                 return new DeSerializeResult(name, a);
             }
-            if (code == 1) { // 非原始类型
+            if (code == OBJECT) { // 非原始类型
                 len = buffer.getInt();
                 byte[] clzByte = new byte[len];
                 buffer.get(clzByte);
@@ -201,7 +233,7 @@ public class ChinaSerialize {
                 }
                 return new DeSerializeResult(name, obj);
             }
-            Class clz = classIndex[code - 2];
+            Class clz = classIndex[code - SHIFT];
             if (clz.equals(int.class) || clz.equals(Integer.class)) {
                 return new DeSerializeResult(name, buffer.getInt());
             }
