@@ -2,7 +2,10 @@ package com.chinaxing.framework.rpc.protocol;
 
 import com.chinaxing.framework.rpc.exception.SerializeException;
 import com.sun.corba.se.impl.ior.OldJIDLObjectKeyTemplate;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+import java.lang.reflect.Array;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
@@ -23,20 +26,24 @@ import java.util.concurrent.ThreadFactory;
  * Created by LambdaCat on 15/8/23.
  */
 public class ChinaSerialize {
-    private static final int EXCEPTION = -2, NULL = -1, ENUM = 0, ARRAY = 1, OBJECT = 2;
-    private static final int SHIFT = 5;
-    private static Map<Class, Integer> classCode = new HashMap<Class, Integer>();
+    private static final Logger logger = LoggerFactory.getLogger(ChinaSerialize.class);
+    private static final byte EXCEPTION = -1, NULL = -2, ENUM = -3, ARRAY = -4, OBJECT = -5;
+    private static Map<Class, Byte> classCode = new HashMap<Class, Byte>();
     private static Class[] classIndex = new Class[]{
             int.class, byte.class, char.class, short.class, double.class, float.class, boolean.class, long.class,
             Integer.class, Byte.class, Character.class, Short.class, Double.class, Float.class, Long.class, Boolean.class,
             String.class, Date.class
     };
+    private static Map<String, Class> primitiveClass = new HashMap<String, Class>();
 
     private static final DateFormat dateFormat = new SimpleDateFormat();
 
     static {
-        for (int i = 0; i < classIndex.length; i++) {
-            classCode.put(classIndex[i], i + SHIFT);
+        for (byte i = 0; i < classIndex.length; i++) {
+            classCode.put(classIndex[i], i);
+        }
+        for (Class c : classIndex) {
+            primitiveClass.put(c.getName(), c);
         }
     }
 
@@ -58,39 +65,29 @@ public class ChinaSerialize {
      * @param obj
      * @param buffer
      */
-    public static void serialize(String name, Object obj, ByteBuffer buffer) {
-        byte[] nameByte = name.getBytes();
-        buffer.putInt(nameByte.length);
-        buffer.put(nameByte);
+    public static void serialize(String name, Object obj, ByteBuffer buffer) throws Throwable {
+        writeString(name, buffer);
         /**
          * 异常
          */
         if (obj instanceof Throwable) {
-            buffer.putInt(EXCEPTION);
-            byte[] tNB = obj.getClass().getName().getBytes();
-            buffer.putInt(tNB.length);
-            buffer.put(tNB);
+            buffer.put(EXCEPTION);
+            writeClassName(obj.getClass(), buffer);
             String msg = ((Throwable) obj).getMessage();
-            if (msg == null) {
-                buffer.putInt(0);
-            } else {
-                byte[] msgB = msg.getBytes();
-                buffer.putInt(msgB.length);
-                buffer.put(msgB);
-            }
+            writeString(msg, buffer);
             return;
         }
         /**
          * 空对象
          */
         if (obj == null) {
-            buffer.putInt(NULL);
+            buffer.put(NULL);
             return;
         }
         Class clz = obj.getClass();
-        Integer index = classCode.get(clz);
+        Byte index = classCode.get(clz);
         if (index != null) {
-            buffer.putInt(index);
+            buffer.put(index);
             if (clz.equals(int.class) || clz.equals(Integer.class)) {
                 buffer.putInt(((Integer) obj).intValue());
                 return;
@@ -124,15 +121,11 @@ public class ChinaSerialize {
                 return;
             }
             if (clz.equals(String.class)) {
-                byte[] sb = ((String) obj).getBytes();
-                buffer.putInt(sb.length);
-                buffer.put(sb);
+                writeString((String) obj, buffer);
                 return;
             }
             if (clz.equals(Date.class)) {
-                byte[] s = dateFormat.format((Date) obj).getBytes();
-                buffer.putInt(s.length);
-                buffer.put(s);
+                writeString(dateFormat.format((Date) obj), buffer);
                 return;
             }
         }
@@ -142,11 +135,8 @@ public class ChinaSerialize {
          * 枚举
          */
         if (clz.isEnum()) {
-            buffer.putInt(ENUM);
-            String clzName = clz.getName();
-            byte[] clzNameByte = clzName.getBytes();
-            buffer.putInt(clzNameByte.length);
-            buffer.put(clzNameByte);
+            buffer.put(ENUM);
+            writeClassName(clz, buffer);
             String en = ((Enum) obj).name();
             byte[] enB = en.getBytes();
             buffer.putInt(enB.length);
@@ -160,22 +150,28 @@ public class ChinaSerialize {
          */
 
         if (clz.isArray()) {
-            buffer.putInt(ARRAY);
-            buffer.putInt(((Object[]) obj).length);
-            for (int i = 0; i < ((Object[]) obj).length; i++) {
-                serialize(String.valueOf(i), ((Object[]) obj)[i], buffer);
+            buffer.put(ARRAY);
+            Class eClz = clz.getComponentType();
+            writeClassName(eClz, buffer);
+            buffer.putInt(Array.getLength(obj));
+            for (int i = 0; i < Array.getLength(obj); i++) {
+                serialize(String.valueOf(i), Array.get(obj, i), buffer);
             }
             return;
         }
 
+        /**
+         * 对象
+         *
+         * TODO 支持有参数的构造器
+         */
 
-        buffer.putInt(OBJECT);
-        String clzName = clz.getName();
-        byte[] clzNameByte = clzName.getBytes();
-        buffer.putInt(clzNameByte.length);
-        buffer.put(clzNameByte);
+        buffer.put(OBJECT);
+        writeClassName(clz, buffer);
         /**
          * write the Fields
+         *
+         * TODO support inherited fields
          */
         Class objClz = obj.getClass();
         Field[] fields = objClz.getDeclaredFields();
@@ -184,35 +180,30 @@ public class ChinaSerialize {
          * 去掉静态域
          */
         for (Field f : fields) {
-            if (Modifier.isStatic(f.getModifiers())) {
+            int mod = f.getModifiers();
+            if (Modifier.isStatic(mod) || Modifier.isTransient(mod)
+                    || Modifier.isFinal(mod)) {
                 continue;
             }
             fieldList.add(f);
         }
         buffer.putInt(fieldList.size());
         for (Field f : fieldList) {
-            try {
-                Object of;
-                if (!f.isAccessible()) {
-                    f.setAccessible(true);
-                    of = f.get(obj);
-                    f.setAccessible(false);
-                } else {
-                    of = f.get(obj);
-                }
-                serialize(f.getName(), of, buffer);
-            } catch (IllegalAccessException ie) {
-                ie.printStackTrace();
+            Object of;
+            if (!f.isAccessible()) {
+                f.setAccessible(true);
+                of = f.get(obj);
+                f.setAccessible(false);
+            } else {
+                of = f.get(obj);
             }
+            serialize(f.getName(), of, buffer);
         }
     }
 
-    public static DeSerializeResult deserialize(ByteBuffer buffer) throws Exception {
-        int len = buffer.getInt();
-        byte[] nameByte = new byte[len];
-        buffer.get(nameByte);
-        String name = new String(nameByte);
-        int code = buffer.getInt();
+    public static DeSerializeResult deserialize(ByteBuffer buffer) throws Throwable {
+        String name = parseString(buffer);
+        int code = buffer.get();
         /**
          * 异常
          */
@@ -220,23 +211,15 @@ public class ChinaSerialize {
             /**
              * exception class name
              */
-            int eNL = buffer.getInt();
-            byte[] eNB = new byte[eNL];
-            buffer.get(eNB);
-            String eCN = new String(eNB);
-            Class e = Class.forName(eCN);
+            Class e = Class.forName(parseString(buffer));
             Constructor c = e.getConstructor(String.class);
             /**
              * message
              */
-            int aNL = buffer.getInt();
-            byte[] aNB = new byte[aNL];
-            buffer.get(aNB);
-            String aCN = new String(aNB);
             if (c == null) {
-                return new DeSerializeResult(name, new Exception(aCN));
+                return new DeSerializeResult(name, new Exception(parseString(buffer)));
             } else {
-                return new DeSerializeResult(name, c.newInstance(aCN));
+                return new DeSerializeResult(name, c.newInstance(parseString(buffer)));
             }
         }
 
@@ -244,30 +227,24 @@ public class ChinaSerialize {
             return new DeSerializeResult(name, null);
         }
         if (code == ENUM) {
-            len = buffer.getInt();
-            byte[] clzByte = new byte[len];
-            buffer.get(clzByte);
-            Class clz = Class.forName(new String(clzByte));
-            int enL = buffer.getInt();
-            byte[] enB = new byte[enL];
-            buffer.get(enB);
-            String en = new String(enB);
-            return new DeSerializeResult(name, Enum.valueOf(clz, en));
+            Class clz = Class.forName(parseString(buffer));
+            return new DeSerializeResult(name, Enum.valueOf(clz, parseString(buffer)));
         }
+        /**
+         * 支持1维数组
+         */
         if (code == ARRAY) { // 数组
+            Class clz = parseArrayElementClass(buffer);
             int al = buffer.getInt();
-            Object[] a = new Object[al];
+            Object a = Array.newInstance(clz, al);
             for (int i = 0; i < al; i++) {
                 DeSerializeResult pa = deserialize(buffer);
-                a[i] = pa.value;
+                Array.set(a, i, pa.value);
             }
             return new DeSerializeResult(name, a);
         }
         if (code == OBJECT) { // 非原始类型
-            len = buffer.getInt();
-            byte[] clzByte = new byte[len];
-            buffer.get(clzByte);
-            Class clz = Class.forName(new String(clzByte));
+            Class clz = Class.forName(parseString(buffer));
             Constructor constructor = clz.getConstructor();
             Object obj;
             if (!constructor.isAccessible()) {
@@ -291,7 +268,7 @@ public class ChinaSerialize {
             }
             return new DeSerializeResult(name, obj);
         }
-        Class clz = classIndex[code - SHIFT];
+        Class clz = classIndex[code];
         if (clz.equals(int.class) || clz.equals(Integer.class)) {
             return new DeSerializeResult(name, buffer.getInt());
         }
@@ -317,42 +294,80 @@ public class ChinaSerialize {
             return new DeSerializeResult(name, buffer.get() == 1);
         }
         if (clz.equals(String.class)) {
-            int sbl = buffer.getInt();
-            byte[] sb = new byte[sbl];
-            buffer.get(sb);
-            return new DeSerializeResult(name, new String(sb));
+            return new DeSerializeResult(name, parseString(buffer));
         }
         if (clz.equals(Date.class)) {
-            int sbl = buffer.getInt();
-            byte[] sb = new byte[sbl];
-            buffer.get(sb);
-            return new DeSerializeResult(name, dateFormat.parse(new String(sb)));
+            return new DeSerializeResult(name, dateFormat.parse(parseString(buffer)));
         }
         throw new SerializeException("unknown code : " + code);
     }
 
-    public static class HellInfo {
-        String hello = "world";
-        int a = 120;
-        byte b = 1;
-        WorldInfo worldInfo = new WorldInfo();
+    private static Class parseArrayElementClass(ByteBuffer buffer) throws Throwable {
+        Class c;
+        Byte index = buffer.get();
+        if (index >= 0) {
+            return classIndex[index];
+        }
+        return Class.forName(parseString(buffer));
     }
 
-    public static class WorldInfo {
-        String world = "ye";
-        int c = 2;
-        Short cc = 22;
+    private static void writeClassName(Class clz, ByteBuffer buffer) {
+        byte index = getClassIndex(clz);
+        buffer.put(index);
+        if (index < 0) {
+            writeString(clz.getName(), buffer);
+        }
+    }
+
+    private static void writeString(String str, ByteBuffer buffer) {
+        if (str == null) {
+            buffer.putInt(0);
+            return;
+        }
+        byte[] clzNameByte = str.getBytes();
+        buffer.putInt(clzNameByte.length);
+        buffer.put(clzNameByte);
+    }
+
+    private static String parseString(ByteBuffer buffer) {
+        int sbl = buffer.getInt();
+        byte[] sb = new byte[sbl];
+        buffer.get(sb);
+        return new String(sb);
+    }
+
+    private static byte getClassIndex(Class clz) {
+        Byte index = classCode.get(clz);
+        if (index != null) {
+            return index;
+        }
+        if (clz.isEnum()) return ENUM;
+        if (clz.isArray()) return ARRAY;
+        return OBJECT;
     }
 
     public static void main(String[] args) {
+        int[] x = new int[]{20, 203, 44};
+        byte[] b = new byte[1024];
+        Integer[] y = new Integer[]{12, 33};
+        ByteBuffer buffer = ByteBuffer.wrap(b);
         try {
-            ByteBuffer buffer = ByteBuffer.allocate(4096);
-            serialize("helloworld", new HellInfo(), buffer);
+            serialize("test", x, buffer);
             buffer.flip();
-            DeSerializeResult deSerializeResult = deserialize(buffer);
-            System.out.println(deSerializeResult.name);
-        } catch (Throwable t) {
-            t.printStackTrace();
+            DeSerializeResult r = deserialize(buffer);
+            System.out.println(r.name);
+            System.out.println(r.value);
+            buffer.clear();
+
+            serialize("test", y, buffer);
+            buffer.flip();
+            r = deserialize(buffer);
+            System.out.println(r.name);
+            System.out.println(r.value);
+            buffer.clear();
+        } catch (Throwable e) {
+            e.printStackTrace();
         }
     }
+
 }
