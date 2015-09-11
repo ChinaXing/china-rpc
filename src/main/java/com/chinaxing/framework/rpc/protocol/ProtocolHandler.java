@@ -161,9 +161,7 @@ public class ProtocolHandler {
 
     private static Class getClass(String name) throws ClassNotFoundException {
         Class c = primitiveClassNameMap.get(name);
-        if (c == null) {
-            return Class.forName(name);
-        }
-        return c;
+        if (c != null) return c;
+        return Class.forName(name);
     }
 }
