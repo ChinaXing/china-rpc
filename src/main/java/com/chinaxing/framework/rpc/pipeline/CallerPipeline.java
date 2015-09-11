@@ -94,30 +94,71 @@ public class CallerPipeline implements Pipeline<PacketEvent, CallRequestEvent> {
 
         // chain together
 
+        /**
+         * 请求的第一环节——数据序列化
+         *
+         * 如果序列化失败，则以Exception 响应调用者
+         */
         callRequestEventDisruptor.handleEventsWith(new EventHandler<CallRequestEvent>() {
             public void onEvent(CallRequestEvent event, long sequence, boolean endOfBatch) throws Exception {
                 long seq = downStreamPacketEventRingBuffer.next();
                 PacketEvent packetEvent = downStreamPacketEventRingBuffer.get(seq);
-                protocolHandler.handleCallerDownStream(event, packetEvent);
+                try {
+                    protocolHandler.handleCallerDownStream(event, packetEvent);
+                } catch (Throwable t) {
+                    CallResponseEvent resp = new CallResponseEvent();
+                    resp.setId(event.getId());
+                    resp.setException(t);
+                    stub.response(resp);
+                    return;
+                }
                 downStreamPacketEventRingBuffer.publish(seq);
             }
         });
 
+        /**
+         * 请求下发的最后一环——数据传输
+         *
+         * 如果发送失败，则以Exception 响应调用者
+         */
         downStreamPacketEventDisruptor.handleEventsWith(new EventHandler<PacketEvent>() {
             public void onEvent(PacketEvent event, long sequence, boolean endOfBatch) throws Exception {
-                transportHandler.send(event);
+                try {
+                    transportHandler.send(event);
+                } catch (Throwable t) {
+                    CallResponseEvent resp = new CallResponseEvent();
+                    resp.setId(event.getId());
+                    resp.setException(t);
+                    stub.response(resp);
+                }
             }
         });
 
+        /**
+         * 请求响应
+         *
+         * 如果解析响应失败，则以Exception 响应
+         */
         upStreamPacketEventDisruptor.handleEventsWith(new EventHandler<PacketEvent>() {
             public void onEvent(PacketEvent event, long sequence, boolean endOfBatch) throws Exception {
                 long seq = callResponseEventRingBuffer.next();
                 CallResponseEvent ev = callResponseEventRingBuffer.get(seq);
-                protocolHandler.handleCallerUpstream(event, ev);
+                try {
+                    protocolHandler.handleCallerUpstream(event, ev);
+                } catch (Throwable t) {
+                    logger.error("protocolHandler exception : {}", event);
+                    logger.error(" ", t);
+                    if (ev.getId() == -1)
+                        return;
+                    ev.setException(t);
+                }
                 callResponseEventRingBuffer.publish(seq);
             }
         });
 
+        /**
+         * 调用响应的最后一环——stub
+         */
         callResponseEventDisruptor.handleEventsWith(new EventHandler<CallResponseEvent>() {
             public void onEvent(CallResponseEvent event, long sequence, boolean endOfBatch) throws Exception {
                 stub.response(event);

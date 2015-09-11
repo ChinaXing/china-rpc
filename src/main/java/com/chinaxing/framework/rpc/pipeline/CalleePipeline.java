@@ -7,11 +7,9 @@ import com.chinaxing.framework.rpc.model.EventContext;
 import com.chinaxing.framework.rpc.model.PacketEvent;
 import com.chinaxing.framework.rpc.protocol.ProtocolHandler;
 import com.chinaxing.framework.rpc.stub.CalleeStub;
-import com.chinaxing.framework.rpc.transport.ConnectionManager;
 import com.chinaxing.framework.rpc.transport.TransportHandler;
 import com.lmax.disruptor.EventFactory;
 import com.lmax.disruptor.EventHandler;
-import com.lmax.disruptor.ExceptionHandler;
 import com.lmax.disruptor.RingBuffer;
 import com.lmax.disruptor.dsl.Disruptor;
 import org.slf4j.Logger;
@@ -95,32 +93,78 @@ public class CalleePipeline implements Pipeline<PacketEvent, CallResponseEvent> 
 
         // chain together
 
+        /**
+         * 请求的第一站——数据的反序列化
+         *
+         * 如果发生异常，则跟如Id进行决定响应
+         */
+        upStreamPacketEventDisruptor.handleEventsWith(new EventHandler<PacketEvent>() {
+            public void onEvent(PacketEvent event, long sequence, boolean endOfBatch) throws Exception {
+                long seq = callRequestEventRingBuffer.next();
+                CallRequestEvent ev = callRequestEventRingBuffer.get(seq);
+                try {
+                    protocolHandler.handleCalleeUpstream(event, ev);
+                } catch (Throwable t) {
+                    if (ev.getId() == -1) {
+                        logger.error("", t);
+                        return;
+                    }
+                    long seq2 = callResponseEventRingBuffer.next();
+                    CallResponseEvent resp = callResponseEventRingBuffer.get(seq2);
+                    resp.setId(ev.getId());
+                    resp.setException(t);
+                    callResponseEventRingBuffer.publish(seq2);
+                    return;
+                }
+                callRequestEventRingBuffer.publish(seq);
+            }
+        });
+
+        /**
+         * 请求上行的最后一站——执行服务调用
+         */
         callRequestEventDisruptor.handleEventsWith(new EventHandler<CallRequestEvent>() {
             public void onEvent(CallRequestEvent event, long sequence, boolean endOfBatch) throws Exception {
                 stub.call(event);
             }
         });
 
+        /**
+         * 响应的最后一站——传输
+         * 如果发生异常，则打印日志
+         */
         downStreamPacketEventDisruptor.handleEventsWith(new EventHandler<PacketEvent>() {
             public void onEvent(PacketEvent event, long sequence, boolean endOfBatch) throws Exception {
-                transportHandler.send(event);
+                try {
+                    transportHandler.send(event);
+                } catch (Throwable t) {
+                    logger.error("exception on transport ev: {}", event);
+                    logger.error("", t);
+                }
             }
         });
 
-        upStreamPacketEventDisruptor.handleEventsWith(new EventHandler<PacketEvent>() {
-            public void onEvent(PacketEvent event, long sequence, boolean endOfBatch) throws Exception {
-                long seq = callRequestEventRingBuffer.next();
-                CallRequestEvent ev = callRequestEventRingBuffer.get(seq);
-                protocolHandler.handleCalleeUpstream(event, ev);
-                callRequestEventRingBuffer.publish(seq);
-            }
-        });
 
+        /**
+         * 响应的第一站，进行序列化
+         *
+         * 如果失败，则异常返回给调用者
+         */
         callResponseEventDisruptor.handleEventsWith(new EventHandler<CallResponseEvent>() {
             public void onEvent(CallResponseEvent event, long sequence, boolean endOfBatch) throws Exception {
                 long seq = downStreamPacketEventRingBuffer.next();
                 PacketEvent ev = downStreamPacketEventRingBuffer.get(seq);
-                protocolHandler.handleCalleeDownStream(event, ev);
+                try {
+                    protocolHandler.handleCalleeDownStream(event, ev);
+                } catch (Throwable t) {
+                    logger.error("exception on protocol ev : {}", event);
+                    long seq2 = callResponseEventRingBuffer.next();
+                    CallResponseEvent resp = callResponseEventRingBuffer.get(seq2);
+                    resp.setId(event.getId());
+                    resp.setException(t);
+                    callResponseEventRingBuffer.publish(seq2);
+                    return;
+                }
                 downStreamPacketEventRingBuffer.publish(seq);
             }
         });

@@ -9,18 +9,18 @@ import java.util.List;
 public class CallRequestEvent {
     private String destination;
     private List<String> availableDestinations;
-    private int id;
+    private int id = -1;
     private Class clz;
     private Method method;
     private Object[] arguments;
 
-    private Exception exception;
+    private Throwable exception;
 
-    public void setException(Exception exception) {
+    public void setException(Throwable exception) {
         this.exception = exception;
     }
 
-    public Exception getException() {
+    public Throwable getException() {
         return exception;
     }
 

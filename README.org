@@ -39,10 +39,23 @@ make a rpc framework, just with elegant, concise design, extend ability.
     指定目标服务提供者的地址进行调用
 
 ** TODO-List
+
+*** Transport
 - 多IO Channel 复用线程，目前一个连接一个线程，连接多的时候这种方式不正确
 - Buffer 分配采用启发式算法
 - 解析Call请求报文支持累积——支持tcp报文分段达到的合并——参考Netty的ByteToMessageDecoder
 - 增加发送重试
+
+*** 序列化
+- 支持没有无参数构造的类——序列化，反序列化
+- 支持内部私有类的序列化，反序列化
+- Object的默认构造方法的RPC（toString，hashCode，equals等）不要代理到远程？
+- 异常类型的序列化
+
+*** 异常处理
+- 序列化异常
+- 传输异常
+- 调用异常
     
 
 

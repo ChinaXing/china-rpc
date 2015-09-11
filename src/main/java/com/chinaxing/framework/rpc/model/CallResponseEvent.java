@@ -4,10 +4,10 @@ package com.chinaxing.framework.rpc.model;
  * Created by LambdaCat on 15/8/22.
  */
 public class CallResponseEvent {
-    private int id;
+    private int id = -1;
     private Object value;
     private String destination;
-    private Exception exception;
+    private Throwable exception;
 
     public int getId() {
         return id;
@@ -33,11 +33,11 @@ public class CallResponseEvent {
         this.destination = destination;
     }
 
-    public Exception getException() {
+    public Throwable getException() {
         return exception;
     }
 
-    public void setException(Exception exception) {
+    public void setException(Throwable exception) {
         this.exception = exception;
     }
 }

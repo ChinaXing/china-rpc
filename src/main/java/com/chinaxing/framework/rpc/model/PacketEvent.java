@@ -10,8 +10,13 @@ import java.util.List;
 public class PacketEvent {
     private String destination;
     private List<String> availableDestinations;
-    private Exception exception;
+    private Throwable exception;
     private ByteBuffer buffer;
+    private int id = -1;
+
+    public void setId(int id) {
+        this.id = id;
+    }
 
     public List<String> getAvailableDestinations() {
         return availableDestinations;
@@ -21,11 +26,11 @@ public class PacketEvent {
         this.availableDestinations = availableDestinations;
     }
 
-    public Exception getException() {
+    public Throwable getException() {
         return exception;
     }
 
-    public void setException(Exception exception) {
+    public void setException(Throwable exception) {
         this.exception = exception;
     }
 
@@ -43,5 +48,9 @@ public class PacketEvent {
 
     public void setBuffer(ByteBuffer buffer) {
         this.buffer = buffer;
+    }
+
+    public int getId() {
+        return id;
     }
 }

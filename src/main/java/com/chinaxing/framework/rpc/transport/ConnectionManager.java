@@ -53,7 +53,7 @@ public class ConnectionManager {
      * @param destination
      * @throws IOException
      */
-    public static void closeConnection(String destination) throws IOException {
+    public static void closeConnection(String destination) {
         Connection connection = channelMap.remove(destination);
         if (connection != null) {
             connection.close();

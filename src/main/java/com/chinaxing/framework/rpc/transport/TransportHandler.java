@@ -33,41 +33,36 @@ public class TransportHandler {
     private volatile boolean started = false;
     private LoadBalance loadBalance;
 
-    public void send(PacketEvent packetEvent) {
+    public void send(PacketEvent packetEvent) throws Throwable {
         String dest = packetEvent.getDestination();
-        while (true) {
-            if (dest == null) {
-                if (loadBalance == null) {
-                    logger.error("destination is Null && loadBalance is Null");
-                    EventContext<PacketEvent> ev = pipeline.up();
-                    ev.getEvent().setException(new IllegalStateException("destination is Null && loadBalance is Null "));
-                    pipeline.publish(ev);
-                    return;
-                }
-                dest = loadBalance.select(packetEvent.getAvailableDestinations());
-                if (dest == null) {
-                    logger.error("cannot found destination from : {}", packetEvent.getAvailableDestinations());
-                    EventContext<PacketEvent> ev = pipeline.up();
-                    ev.getEvent().setException(new Exception("cannot found available destination from : "
-                            + packetEvent.getAvailableDestinations()));
-                    pipeline.publish(ev);
-                    return;
-                }
-            }
-            try {
-                Connection connection = ConnectionManager.getConnection(dest);
-                if (connection.getHandler() == null) {
-                    connection.setHandler(this);
-                }
-                connection.send(packetEvent.getBuffer());
-                return;
-            } catch (Exception e) {
-                logger.error("", e);
+        if (dest == null) {
+            if (loadBalance == null) {
+                logger.error("destination is Null && loadBalance is Null");
                 EventContext<PacketEvent> ev = pipeline.up();
-                ev.getEvent().setException(e);
+                ev.getEvent().setException(new IllegalStateException("destination is Null && loadBalance is Null "));
                 pipeline.publish(ev);
                 return;
             }
+            dest = loadBalance.select(packetEvent.getAvailableDestinations());
+            if (dest == null) {
+                logger.error("cannot found destination from : {}", packetEvent.getAvailableDestinations());
+                EventContext<PacketEvent> ev = pipeline.up();
+                ev.getEvent().setException(new Exception("cannot found available destination from : "
+                        + packetEvent.getAvailableDestinations()));
+                pipeline.publish(ev);
+                return;
+            }
+        }
+        Connection connection = null;
+        try {
+            connection = ConnectionManager.getConnection(dest);
+            if (connection.getHandler() == null) {
+                connection.setHandler(this);
+            }
+            connection.send(packetEvent.getBuffer());
+        } catch (Throwable e) {
+            if (connection != null) connection.close();
+            throw e;
         }
     }
 
@@ -103,7 +98,8 @@ public class TransportHandler {
                         }
                     }
                 } catch (Throwable e) {
-                    logger.error("", e);
+                    logger.error("close with cause : ", e);
+                } finally {
                     key.cancel();
                     try {
                         serverSocketChannel.close();
@@ -130,9 +126,13 @@ public class TransportHandler {
             new ConcurrentHashMap<String, LinkedBlockingQueue<ByteBuffer>>();
 
     public void receive(String destination, ByteBuffer buffer) {
-        EventContext<PacketEvent> ev = pipeline.up();
-        ev.getEvent().setBuffer(buffer);
-        ev.getEvent().setDestination(destination);
-        pipeline.publish(ev);
+        try {
+            EventContext<PacketEvent> ev = pipeline.up();
+            ev.getEvent().setBuffer(buffer);
+            ev.getEvent().setDestination(destination);
+            pipeline.publish(ev);
+        } catch (Throwable e) {
+            logger.error("", e);
+        }
     }
 }

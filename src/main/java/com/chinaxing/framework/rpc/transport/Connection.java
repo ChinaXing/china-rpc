@@ -56,7 +56,7 @@ public class Connection {
         }
     }
 
-    public void startEventLoop() throws IOException {
+    public void startEventLoop() throws Throwable {
         if (!ioEventLoop.start) ioEventLoop.start();
     }
 
@@ -104,7 +104,7 @@ public class Connection {
         this.executor = executor;
     }
 
-    public void close() throws IOException {
+    public synchronized void close() {
         this.ioEventLoop.close();
         Q.clear();
     }
@@ -115,7 +115,7 @@ public class Connection {
      * @param buffer
      * @throws IOException
      */
-    public void send(ByteBuffer buffer) throws IOException {
+    public void send(ByteBuffer buffer) throws Throwable {
         startEventLoop();
         if (!ioEventLoop.send(buffer)) {
             if (!ioEventLoop.start) {
@@ -134,26 +134,18 @@ public class Connection {
         private volatile boolean start = false;
         private SelectionKey key;
 
-        public synchronized void start() throws IOException {
+        public synchronized void start() throws Throwable {
             if (start) return;
-            try {
-                selector = Selector.open();
-                if (channel == null)
-                    channel = SocketChannel.open(new InetSocketAddress(host, port));
-                channel.configureBlocking(false);
-                key = channel.register(selector, SelectionKey.OP_READ | SelectionKey.OP_WRITE);
-                start = true;
-                executor.execute(this);
-            } catch (Throwable e) {
-                logger.error("", e);
-                if (selector.isOpen()) {
-                    selector.close();
-                }
-                start = false;
-            }
+            selector = Selector.open();
+            if (channel == null)
+                channel = SocketChannel.open(new InetSocketAddress(host, port));
+            channel.configureBlocking(false);
+            key = channel.register(selector, SelectionKey.OP_READ | SelectionKey.OP_WRITE);
+            start = true;
+            executor.execute(this);
         }
 
-        public boolean send(ByteBuffer buffer) throws IOException {
+        public boolean send(ByteBuffer buffer) throws Throwable {
             if (key.isWritable()) {
                 int c = channel.write(buffer);
                 if (c < 0) {
@@ -207,36 +199,27 @@ public class Connection {
                         }
                     }
                 }
-            } catch (ClosedSelectorException e) {
-                logger.error("Closed Selector", e);
-                try {
-                    close();
-                } catch (Exception e2) {
-                    logger.error("", e2);
-                }
-            } catch (IOException e) {
-                logger.error("", e);
-                try {
-                    close();
-                } catch (Exception e2) {
-                    logger.error("", e2);
-                }
             } catch (Throwable t) {
                 logger.error("exception", t);
-                try {
-                    close();
-                } catch (Exception e2) {
-                    logger.error("", e2);
-                }
+            } finally {
+                close();
             }
         }
 
-        public synchronized void close() throws IOException {
-            start = false;
-            channel.close();
-            channel = null;
-            key.cancel();
-            selector.close();
+        public synchronized void close() {
+            try {
+                start = false;
+                if (channel != null)
+                    channel.close();
+                else
+                    channel = null;
+                if (key.isConnectable())
+                    key.cancel();
+                if (selector.isOpen())
+                    selector.close();
+            } catch (Exception e2) {
+                logger.error("", e2);
+            }
         }
     }
 }

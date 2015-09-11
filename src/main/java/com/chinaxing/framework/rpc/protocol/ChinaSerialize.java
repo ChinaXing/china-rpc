@@ -1,13 +1,16 @@
 package com.chinaxing.framework.rpc.protocol;
 
+import com.chinaxing.framework.rpc.exception.SerializeException;
 import com.sun.corba.se.impl.ior.OldJIDLObjectKeyTemplate;
 
+import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 import java.nio.ByteBuffer;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.util.*;
+import java.util.concurrent.ThreadFactory;
 
 /**
  * 序列化反序列化工具
@@ -20,8 +23,8 @@ import java.util.*;
  * Created by LambdaCat on 15/8/23.
  */
 public class ChinaSerialize {
-    private static final int NULL = -1, ENUM = 0, ARRAY = 1, OBJECT = 2;
-    private static final int SHIFT = 4;
+    private static final int EXCEPTION = -2, NULL = -1, ENUM = 0, ARRAY = 1, OBJECT = 2;
+    private static final int SHIFT = 5;
     private static Map<Class, Integer> classCode = new HashMap<Class, Integer>();
     private static Class[] classIndex = new Class[]{
             int.class, byte.class, char.class, short.class, double.class, float.class, boolean.class, long.class,
@@ -59,6 +62,27 @@ public class ChinaSerialize {
         byte[] nameByte = name.getBytes();
         buffer.putInt(nameByte.length);
         buffer.put(nameByte);
+        /**
+         * 异常
+         */
+        if (obj instanceof Throwable) {
+            buffer.putInt(EXCEPTION);
+            byte[] tNB = obj.getClass().getName().getBytes();
+            buffer.putInt(tNB.length);
+            buffer.put(tNB);
+            String msg = ((Throwable) obj).getMessage();
+            if (msg == null) {
+                buffer.putInt(0);
+            } else {
+                byte[] msgB = msg.getBytes();
+                buffer.putInt(msgB.length);
+                buffer.put(msgB);
+            }
+            return;
+        }
+        /**
+         * 空对象
+         */
         if (obj == null) {
             buffer.putInt(NULL);
             return;
@@ -183,97 +207,128 @@ public class ChinaSerialize {
         }
     }
 
-    public static DeSerializeResult deserialize(ByteBuffer buffer) {
-        try {
-            int len = buffer.getInt();
-            byte[] nameByte = new byte[len];
-            buffer.get(nameByte);
-            String name = new String(nameByte);
-            int code = buffer.getInt();
-            if (code == NULL) {
-                return new DeSerializeResult(name, null);
+    public static DeSerializeResult deserialize(ByteBuffer buffer) throws Exception {
+        int len = buffer.getInt();
+        byte[] nameByte = new byte[len];
+        buffer.get(nameByte);
+        String name = new String(nameByte);
+        int code = buffer.getInt();
+        /**
+         * 异常
+         */
+        if (code == EXCEPTION) {
+            /**
+             * exception class name
+             */
+            int eNL = buffer.getInt();
+            byte[] eNB = new byte[eNL];
+            buffer.get(eNB);
+            String eCN = new String(eNB);
+            Class e = Class.forName(eCN);
+            Constructor c = e.getConstructor(String.class);
+            /**
+             * message
+             */
+            int aNL = buffer.getInt();
+            byte[] aNB = new byte[aNL];
+            buffer.get(aNB);
+            String aCN = new String(aNB);
+            if (c == null) {
+                return new DeSerializeResult(name, new Exception(aCN));
+            } else {
+                return new DeSerializeResult(name, c.newInstance(aCN));
             }
-            if (code == ENUM) {
-                len = buffer.getInt();
-                byte[] clzByte = new byte[len];
-                buffer.get(clzByte);
-                Class clz = Class.forName(new String(clzByte));
-                int enL = buffer.getInt();
-                byte[] enB = new byte[enL];
-                buffer.get(enB);
-                String en = new String(enB);
-                return new DeSerializeResult(name, Enum.valueOf(clz, en));
-            }
-            if (code == ARRAY) { // 数组
-                int al = buffer.getInt();
-                Object[] a = new Object[al];
-                for (int i = 0; i < al; i++) {
-                    DeSerializeResult pa = deserialize(buffer);
-                    a[i] = pa.value;
-                }
-                return new DeSerializeResult(name, a);
-            }
-            if (code == OBJECT) { // 非原始类型
-                len = buffer.getInt();
-                byte[] clzByte = new byte[len];
-                buffer.get(clzByte);
-                Class clz = Class.forName(new String(clzByte));
-                Object obj = clz.newInstance();
-                int fl = buffer.getInt();
-                for (int i = 0; i < fl; i++) {
-                    DeSerializeResult dp = deserialize(buffer);
-                    Field f = clz.getDeclaredField(dp.name);
-                    if (f.isAccessible()) {
-                        f.set(obj, dp.value);
-                    } else {
-                        f.setAccessible(true);
-                        f.set(obj, dp.value);
-                        f.setAccessible(false);
-                    }
-                }
-                return new DeSerializeResult(name, obj);
-            }
-            Class clz = classIndex[code - SHIFT];
-            if (clz.equals(int.class) || clz.equals(Integer.class)) {
-                return new DeSerializeResult(name, buffer.getInt());
-            }
-            if (clz.equals(byte.class) || clz.equals(Byte.class)) {
-                return new DeSerializeResult(name, buffer.get());
-            }
-            if (clz.equals(char.class) || clz.equals(Character.class)) {
-                return new DeSerializeResult(name, buffer.getChar());
-            }
-            if (clz.equals(short.class) || clz.equals(Short.class)) {
-                return new DeSerializeResult(name, buffer.getShort());
-            }
-            if (clz.equals(long.class) || clz.equals(Long.class)) {
-                return new DeSerializeResult(name, buffer.getLong());
-            }
-            if (clz.equals(double.class) || clz.equals(Double.class)) {
-                return new DeSerializeResult(name, buffer.getDouble());
-            }
-            if (clz.equals(float.class) || clz.equals(Float.class)) {
-                return new DeSerializeResult(name, buffer.getFloat());
-            }
-            if (clz.equals(boolean.class) || clz.equals(Boolean.class)) {
-                return new DeSerializeResult(name, buffer.get() == 1);
-            }
-            if (clz.equals(String.class)) {
-                int sbl = buffer.getInt();
-                byte[] sb = new byte[sbl];
-                buffer.get(sb);
-                return new DeSerializeResult(name, new String(sb));
-            }
-            if (clz.equals(Date.class)) {
-                int sbl = buffer.getInt();
-                byte[] sb = new byte[sbl];
-                buffer.get(sb);
-                return new DeSerializeResult(name, dateFormat.parse(new String(sb)));
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
         }
-        return null;
+
+        if (code == NULL) {
+            return new DeSerializeResult(name, null);
+        }
+        if (code == ENUM) {
+            len = buffer.getInt();
+            byte[] clzByte = new byte[len];
+            buffer.get(clzByte);
+            Class clz = Class.forName(new String(clzByte));
+            int enL = buffer.getInt();
+            byte[] enB = new byte[enL];
+            buffer.get(enB);
+            String en = new String(enB);
+            return new DeSerializeResult(name, Enum.valueOf(clz, en));
+        }
+        if (code == ARRAY) { // 数组
+            int al = buffer.getInt();
+            Object[] a = new Object[al];
+            for (int i = 0; i < al; i++) {
+                DeSerializeResult pa = deserialize(buffer);
+                a[i] = pa.value;
+            }
+            return new DeSerializeResult(name, a);
+        }
+        if (code == OBJECT) { // 非原始类型
+            len = buffer.getInt();
+            byte[] clzByte = new byte[len];
+            buffer.get(clzByte);
+            Class clz = Class.forName(new String(clzByte));
+            Constructor constructor = clz.getConstructor();
+            Object obj;
+            if (!constructor.isAccessible()) {
+                constructor.setAccessible(true);
+                obj = constructor.newInstance();
+                constructor.setAccessible(false);
+            } else {
+                obj = constructor.newInstance();
+            }
+            int fl = buffer.getInt();
+            for (int i = 0; i < fl; i++) {
+                DeSerializeResult dp = deserialize(buffer);
+                Field f = clz.getDeclaredField(dp.name);
+                if (f.isAccessible()) {
+                    f.set(obj, dp.value);
+                } else {
+                    f.setAccessible(true);
+                    f.set(obj, dp.value);
+                    f.setAccessible(false);
+                }
+            }
+            return new DeSerializeResult(name, obj);
+        }
+        Class clz = classIndex[code - SHIFT];
+        if (clz.equals(int.class) || clz.equals(Integer.class)) {
+            return new DeSerializeResult(name, buffer.getInt());
+        }
+        if (clz.equals(byte.class) || clz.equals(Byte.class)) {
+            return new DeSerializeResult(name, buffer.get());
+        }
+        if (clz.equals(char.class) || clz.equals(Character.class)) {
+            return new DeSerializeResult(name, buffer.getChar());
+        }
+        if (clz.equals(short.class) || clz.equals(Short.class)) {
+            return new DeSerializeResult(name, buffer.getShort());
+        }
+        if (clz.equals(long.class) || clz.equals(Long.class)) {
+            return new DeSerializeResult(name, buffer.getLong());
+        }
+        if (clz.equals(double.class) || clz.equals(Double.class)) {
+            return new DeSerializeResult(name, buffer.getDouble());
+        }
+        if (clz.equals(float.class) || clz.equals(Float.class)) {
+            return new DeSerializeResult(name, buffer.getFloat());
+        }
+        if (clz.equals(boolean.class) || clz.equals(Boolean.class)) {
+            return new DeSerializeResult(name, buffer.get() == 1);
+        }
+        if (clz.equals(String.class)) {
+            int sbl = buffer.getInt();
+            byte[] sb = new byte[sbl];
+            buffer.get(sb);
+            return new DeSerializeResult(name, new String(sb));
+        }
+        if (clz.equals(Date.class)) {
+            int sbl = buffer.getInt();
+            byte[] sb = new byte[sbl];
+            buffer.get(sb);
+            return new DeSerializeResult(name, dateFormat.parse(new String(sb)));
+        }
+        throw new SerializeException("unknown code : " + code);
     }
 
     public static class HellInfo {
@@ -290,10 +345,14 @@ public class ChinaSerialize {
     }
 
     public static void main(String[] args) {
-        ByteBuffer buffer = ByteBuffer.allocate(4096);
-        serialize("helloworld", new HellInfo(), buffer);
-        buffer.flip();
-        DeSerializeResult deSerializeResult = deserialize(buffer);
-        System.out.println(deSerializeResult.name);
+        try {
+            ByteBuffer buffer = ByteBuffer.allocate(4096);
+            serialize("helloworld", new HellInfo(), buffer);
+            buffer.flip();
+            DeSerializeResult deSerializeResult = deserialize(buffer);
+            System.out.println(deSerializeResult.name);
+        } catch (Throwable t) {
+            t.printStackTrace();
+        }
     }
 }
