@@ -12,15 +12,32 @@ public class RemoteCallPromise<V> implements Promise<V> {
     private volatile boolean isDone = false;
     private volatile boolean isCancelled = false;
     private volatile boolean isFailure = false;
+    private volatile boolean isException = false;
     private volatile V data;
     private volatile String reason;
     private volatile Thread t;
+    private volatile Throwable cause;
     private CountDownLatch latch = new CountDownLatch(1);
 
     public void setSuccess(V v) {
         isDone = true;
         data = v;
         latch.countDown();
+    }
+
+    public void setException(Throwable t) {
+        isFailure = true;
+        isException = true;
+        cause = t;
+        latch.countDown();
+    }
+
+    public boolean isException() {
+        return isException;
+    }
+
+    public Throwable getCause() {
+        return cause;
     }
 
     public void setFailure(String reason) {
@@ -63,5 +80,13 @@ public class RemoteCallPromise<V> implements Promise<V> {
         if (isDone) return data;
         if (isCancelled || isFailure) return null;
         throw new TimeoutException(timeout + " " + unit);
+    }
+
+    public boolean isFailure() {
+        return isFailure;
+    }
+
+    public String getReason() {
+        return reason;
     }
 }

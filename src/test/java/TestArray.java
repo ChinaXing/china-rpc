@@ -1,4 +1,5 @@
 import impl.ArrayServiceImpl;
+import model.PlainPojo;
 import service.ArrayService;
 
 import java.util.Date;
@@ -14,13 +15,14 @@ public class TestArray extends TestRPC {
 //        System.out.println(ts.getInts());
 //        System.out.println(ts.getShorts());
 //        System.out.println(ts.df(new double[]{1.2, 2.3}));
-        System.out.println(ts.df(new Date[]{new Date(), new Date()}));
+        // System.out.println(ts.df(new Date[]{new Date(), new Date()}));
+        System.out.println(ts.m(new PlainPojo[]{new PlainPojo(true, "xxx"), new PlainPojo(false, "xxxDDD")}));
     }
 
     public static void main(String[] args) {
         try {
             new TestArray().doTest();
-        }catch (Throwable t) {
+        } catch (Throwable t) {
             t.printStackTrace();
         }
     }

@@ -11,6 +11,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.lang.reflect.InvocationHandler;
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 import java.util.Map;
@@ -82,8 +83,11 @@ public class CalleeStub {
         try {
             Object result = m.invoke(invoked, argument);
             e.setValue(result);
-        } catch (Exception ex) {
-            e.setValue(ex);
+        } catch (InvocationTargetException ex) {
+            e.setValue(null);
+            e.setException(ex.getTargetException());
+        } catch (Exception x) {
+            e.setException(x);
         }
         pipeline.publish(ev);
     }

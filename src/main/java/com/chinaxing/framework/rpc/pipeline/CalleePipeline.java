@@ -7,6 +7,7 @@ import com.chinaxing.framework.rpc.model.EventContext;
 import com.chinaxing.framework.rpc.model.PacketEvent;
 import com.chinaxing.framework.rpc.protocol.ProtocolHandler;
 import com.chinaxing.framework.rpc.stub.CalleeStub;
+import com.chinaxing.framework.rpc.transport.IoEventLoopGroup;
 import com.chinaxing.framework.rpc.transport.TransportHandler;
 import com.lmax.disruptor.EventFactory;
 import com.lmax.disruptor.EventHandler;
@@ -30,7 +31,6 @@ import java.util.concurrent.Executor;
 public class CalleePipeline implements Pipeline<PacketEvent, CallResponseEvent> {
     private static final Logger logger = LoggerFactory.getLogger(CalleePipeline.class);
     private final Executor executor;
-    private final Executor ioExecutor;
     private final int capacity;
     private final int port;
     private final String host;
@@ -39,7 +39,7 @@ public class CalleePipeline implements Pipeline<PacketEvent, CallResponseEvent> 
     private Disruptor<PacketEvent> upStreamPacketEventDisruptor;
     private Disruptor<CallResponseEvent> callResponseEventDisruptor;
     private ProtocolHandler protocolHandler = new ProtocolHandler();
-    private TransportHandler transportHandler = new TransportHandler(this);
+    private TransportHandler transportHandler;
     private CalleeStub stub;
     private RingBuffer<CallRequestEvent> callRequestEventRingBuffer;
     private RingBuffer<PacketEvent> downStreamPacketEventRingBuffer;
@@ -47,13 +47,13 @@ public class CalleePipeline implements Pipeline<PacketEvent, CallResponseEvent> 
     private RingBuffer<CallResponseEvent> callResponseEventRingBuffer;
 
 
-    public CalleePipeline(Executor executor, Executor ioExecutor, int capacity, String host, int port) {
+    public CalleePipeline(Executor executor, IoEventLoopGroup ioEventLoopGroup, int capacity, String host, int port) {
         this.executor = executor;
         this.capacity = capacity;
-        this.ioExecutor = ioExecutor;
         this.host = host;
         this.port = port;
 
+        transportHandler = new TransportHandler(this, ioEventLoopGroup, null);
         init();
     }
 
@@ -94,7 +94,7 @@ public class CalleePipeline implements Pipeline<PacketEvent, CallResponseEvent> 
         // chain together
 
         /**
-         * 请求的第一站——数据的反序列化
+         * 接收请求的第一站——数据的反序列化
          *
          * 如果发生异常，则跟如Id进行决定响应
          */
@@ -111,6 +111,7 @@ public class CalleePipeline implements Pipeline<PacketEvent, CallResponseEvent> 
                     }
                     long seq2 = callResponseEventRingBuffer.next();
                     CallResponseEvent resp = callResponseEventRingBuffer.get(seq2);
+                    resp.setDestination(event.getDestination());
                     resp.setId(ev.getId());
                     resp.setException(t);
                     callResponseEventRingBuffer.publish(seq2);
@@ -161,6 +162,7 @@ public class CalleePipeline implements Pipeline<PacketEvent, CallResponseEvent> 
                     long seq2 = callResponseEventRingBuffer.next();
                     CallResponseEvent resp = callResponseEventRingBuffer.get(seq2);
                     resp.setId(event.getId());
+                    resp.setDestination(event.getDestination());
                     resp.setException(t);
                     callResponseEventRingBuffer.publish(seq2);
                     return;
@@ -176,7 +178,7 @@ public class CalleePipeline implements Pipeline<PacketEvent, CallResponseEvent> 
         callResponseEventRingBuffer = callResponseEventDisruptor.start();
         upStreamPacketEventRingBuffer = upStreamPacketEventDisruptor.start();
         downStreamPacketEventRingBuffer = downStreamPacketEventDisruptor.start();
-        transportHandler.startServer(ioExecutor, host, port);
+        transportHandler.startServer(host, port);
     }
 
     public EventContext<PacketEvent> up() {

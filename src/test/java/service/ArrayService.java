@@ -1,5 +1,7 @@
 package service;
 
+import model.PlainPojo;
+
 import java.util.Date;
 
 /**
@@ -15,4 +17,8 @@ public interface ArrayService {
     public double[] df(double[] x);
 
     public Date[] df(Date[] x);
+
+    public PlainPojo[] df(PlainPojo[] x);
+
+    boolean m(PlainPojo[] plainPojos);
 }

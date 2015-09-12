@@ -19,8 +19,14 @@ public class RRLoadBalance implements LoadBalance {
     private int count = 0;
     private static final int RR_STICK = 10;
     private static final int MAX_RETRY = 3;
+    private ConnectionManager connectionManager;
 
-    public synchronized String select(List<String> address) {
+    public void setConnectionManager(ConnectionManager connectionManager) {
+        this.connectionManager = connectionManager;
+    }
+
+    public synchronized String select(List<String> address) throws Throwable {
+        assert connectionManager != null;
         if (current == null) {
             select0(address, address.size());
             return current;
@@ -32,7 +38,7 @@ public class RRLoadBalance implements LoadBalance {
         return current;
     }
 
-    public void select0(List<String> address, int len) {
+    public void select0(List<String> address, int len) throws Throwable {
         for (int i = 0; i < len; i++) {
             String dest = address.get(index.getAndIncrement() % len);
             Integer v = providerInfo.get(dest);
@@ -42,7 +48,7 @@ public class RRLoadBalance implements LoadBalance {
             }
 
             try {
-                Connection connection = ConnectionManager.getConnection(dest);
+                Connection connection = connectionManager.getConnection(dest);
                 if (!connection.isRunning()) {
                     connection.start();
                 }

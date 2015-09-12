@@ -15,9 +15,8 @@ public abstract class TestRPC {
     @Before
     public void testAppointCall() throws Throwable {
         rpc = ChinaRPC.getBuilder().setTimeout(300000)
-                .setCallExecutor(Executors.newFixedThreadPool(20))
-                .setIoExecutor(Executors.newFixedThreadPool(4))
-                .build();
+                .setCallExecutorCount(10)
+                .setIoEventLoopCount(4).build();
     }
 
     @Test

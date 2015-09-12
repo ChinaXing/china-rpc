@@ -7,8 +7,8 @@ import com.chinaxing.framework.rpc.model.EventContext;
 import com.chinaxing.framework.rpc.model.PacketEvent;
 import com.chinaxing.framework.rpc.protocol.ProtocolHandler;
 import com.chinaxing.framework.rpc.stub.CallerStub;
+import com.chinaxing.framework.rpc.transport.IoEventLoopGroup;
 import com.chinaxing.framework.rpc.transport.LoadBalance;
-import com.chinaxing.framework.rpc.transport.RRLoadBalance;
 import com.chinaxing.framework.rpc.transport.TransportHandler;
 import com.lmax.disruptor.EventFactory;
 import com.lmax.disruptor.EventHandler;
@@ -41,24 +41,25 @@ public class CallerPipeline implements Pipeline<PacketEvent, CallRequestEvent> {
     private Disruptor<PacketEvent> upStreamPacketEventDisruptor;
     private Disruptor<CallResponseEvent> callResponseEventDisruptor;
     private ProtocolHandler protocolHandler = new ProtocolHandler();
-    private TransportHandler transportHandler = new TransportHandler(this);
+    private TransportHandler transportHandler;
     private CallerStub stub;
     private RingBuffer<CallRequestEvent> callRequestEventRingBuffer;
     private RingBuffer<PacketEvent> downStreamPacketEventRingBuffer;
     private RingBuffer<PacketEvent> upStreamPacketEventRingBuffer;
     private RingBuffer<CallResponseEvent> callResponseEventRingBuffer;
 
-
-    public CallerPipeline(Executor executor, int capacity, LoadBalance loadBalance) {
+    public CallerPipeline(Executor executor, IoEventLoopGroup ioEventLoopGroup,int capacity, LoadBalance loadBalance) {
         this.executor = executor;
         this.capacity = capacity;
         this.loadBalance = loadBalance;
+        transportHandler = new TransportHandler(this, ioEventLoopGroup, loadBalance);
         init();
     }
 
     public void setStub(CallerStub stub) {
         this.stub = stub;
     }
+
 
     private void init() {
         callRequestEventDisruptor = new Disruptor<CallRequestEvent>(new EventFactory<CallRequestEvent>() {

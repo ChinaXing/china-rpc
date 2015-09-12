@@ -1,5 +1,6 @@
 package impl;
 
+import model.PlainPojo;
 import service.ArrayService;
 
 import java.util.Date;
@@ -22,5 +23,13 @@ public class ArrayServiceImpl implements ArrayService {
 
     public Date[] df(Date[] x) {
         return new Date[]{x[0], new Date()};
+    }
+
+    public PlainPojo[] df(PlainPojo[] x) {
+        return new PlainPojo[]{new PlainPojo(true, "ok"), new PlainPojo(false, "xxx")};
+    }
+
+    public boolean m(PlainPojo[] plainPojos) {
+        return false;
     }
 }

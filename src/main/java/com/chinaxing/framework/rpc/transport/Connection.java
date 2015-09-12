@@ -1,12 +1,15 @@
 package com.chinaxing.framework.rpc.transport;
 
+import com.chinaxing.framework.rpc.protocol.SafeBuffer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import sun.io.ByteToCharUnicodeBigUnmarked;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.*;
+import java.util.Arrays;
 import java.util.Set;
 import java.util.concurrent.Executor;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -18,57 +21,65 @@ import java.util.concurrent.LinkedBlockingQueue;
  */
 public class Connection {
     private static final Logger logger = LoggerFactory.getLogger(Connection.class);
+    private final IOEventLoop ioEventLoop;
     private String destination;
     private String host;
     private int port;
-    private SocketChannel channel;
-    private IOEventLoop ioEventLoop;
+    private SocketChannel channel = null;
     private LinkedBlockingQueue<ByteBuffer> Q = new LinkedBlockingQueue<ByteBuffer>();
-    private TransportHandler handler;
-    private Executor executor;
+    private ConnectionHandler handler;
+    private volatile boolean start = false;
+    private SafeBuffer buffer;
+    private final ByteBuffer lBuf = ByteBuffer.allocate(16);
+    private int state;
 
+    public int getState() {
+        return state;
+    }
 
-    public Connection(String destination, Executor executor) throws IOException {
+    public SafeBuffer getBuffer() {
+        return buffer;
+    }
+
+    public ByteBuffer getlBuf() {
+        return lBuf;
+    }
+
+    public void setBuffer(SafeBuffer buffer) {
+        this.buffer = buffer;
+    }
+
+    public void setState(int state) {
+        this.state = state;
+    }
+
+    public Connection(String destination, ConnectionHandler handler, IOEventLoop ioEventLoop) {
         this.destination = destination;
-        this.executor = executor;
         String[] a = destination.split(":");
         this.host = a[0];
         this.port = Integer.valueOf(a[1]);
-        start();
-
+        this.handler = handler;
+        this.ioEventLoop = ioEventLoop;
     }
 
-    public Connection(String destination, SocketChannel channel, Executor ioExecutor) throws IOException {
-        this.destination = destination;
-        this.executor = ioExecutor;
-        this.channel = channel;
-        String[] a = destination.split(":");
-        this.host = a[0];
-        this.port = Integer.valueOf(a[1]);
-        start();
-    }
-
-    public void start() throws IOException {
+    public synchronized void start() throws Throwable {
+        if (start) return;
         if (channel == null)
             channel = SocketChannel.open(new InetSocketAddress(host, port));
-        if (ioEventLoop == null) {
-            ioEventLoop = new IOEventLoop();
-        }
-    }
-
-    public void startEventLoop() throws Throwable {
-        if (!ioEventLoop.start) ioEventLoop.start();
+        if (!channel.isRegistered())
+            ioEventLoop.register(this);
+        start = true;
     }
 
     public boolean isRunning() {
-        return channel != null;
+        return start;
     }
 
-    public TransportHandler getHandler() {
+    public ConnectionHandler getHandler() {
         return handler;
     }
 
-    public void setHandler(TransportHandler handler) {
+    public void setHandler(ConnectionHandler handler) {
         this.handler = handler;
     }
 
@@ -96,130 +107,40 @@ public class Connection {
         this.destination = destination;
     }
 
-    public Executor getExecutor() {
-        return executor;
-    }
-
-    public void setExecutor(Executor executor) {
-        this.executor = executor;
+    public SocketChannel getChannel() {
+        return channel;
     }
 
     public synchronized void close() {
-        this.ioEventLoop.close();
+        start = false;
+        channel = null;
         Q.clear();
     }
 
-    /**
-     * 发送失败，上层从新选择Connection
-     *
-     * @param buffer
-     * @throws IOException
-     */
-    public void send(ByteBuffer buffer) throws Throwable {
-        startEventLoop();
-        if (!ioEventLoop.send(buffer)) {
-            if (!ioEventLoop.start) {
-                startEventLoop();
-            }
-            Q.add(buffer);
-        }
+    public synchronized void stop() {
+        start = false;
     }
 
+    public void send(SafeBuffer buffer) throws Throwable {
+        Q.addAll(Arrays.asList(buffer.getBuffers()));
+        ioEventLoop.wakeup();
+    }
 
-    /**
-     * 每个SocketChannel 一个IOEventLoop
-     */
-    class IOEventLoop implements Runnable {
-        private Selector selector;
-        private volatile boolean start = false;
-        private SelectionKey key;
+    public void handle() {
+        buffer.flip();
+        buffer.getInt();
+        handler.handle(destination, buffer);
+    }
 
-        public synchronized void start() throws Throwable {
-            if (start) return;
-            selector = Selector.open();
-            if (channel == null)
-                channel = SocketChannel.open(new InetSocketAddress(host, port));
-            channel.configureBlocking(false);
-            key = channel.register(selector, SelectionKey.OP_READ | SelectionKey.OP_WRITE);
-            start = true;
-            executor.execute(this);
-        }
+    public void pollData() {
+        Q.poll();
+    }
 
-        public boolean send(ByteBuffer buffer) throws Throwable {
-            if (key.isWritable()) {
-                int c = channel.write(buffer);
-                if (c < 0) {
-                    close();
-                    return false;
-                }
-                if (c == 0) return false;
-                return true;
-            }
-            return false;
-        }
+    public ByteBuffer peekData() {
+        return Q.peek();
+    }
 
-        public void run() {
-            try {
-                while (start) {
-                    int count = selector.select(1000);
-                    if (count == 0) continue;
-                    Set<SelectionKey> selected = selector.selectedKeys();
-                    for (SelectionKey k : selected) {
-                        if (k.isReadable()) {
-                            SocketChannel channel = (SocketChannel) k.channel();
-                            while (true) {
-                                ByteBuffer buffer = ByteBuffer.allocateDirect(1024);
-                                int c = channel.read(buffer);
-                                if (c < 0) {// channel is close by other side
-                                    close();
-                                    return;
-                                }
-                                if (c == 0) break;
-                                buffer.flip();
-                                handler.receive(destination, buffer);
-                            }
-                            continue;
-                        }
-                        if (k.isWritable()) {
-                            SocketChannel channel = (SocketChannel) k.channel();
-                            while (true) {
-                                ByteBuffer buffer = Q.peek();
-                                if (buffer != null) {
-                                    int c = channel.write(buffer);
-                                    if (c < 0) {
-                                        close();
-                                        return;
-                                    }
-                                    if (c == 0) break;
-                                    Q.poll();
-                                } else {
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                }
-            } catch (Throwable t) {
-                logger.error("exception", t);
-            } finally {
-                close();
-            }
-        }
-
-        public synchronized void close() {
-            try {
-                start = false;
-                if (channel != null) {
-                    channel.close();
-                    channel = null;
-                }
-                if (key.isConnectable())
-                    key.cancel();
-                if (selector.isOpen())
-                    selector.close();
-            } catch (Exception e2) {
-                logger.error("", e2);
-            }
-        }
+    public void setChannel(SocketChannel channel) {
+        this.channel = channel;
     }
 }

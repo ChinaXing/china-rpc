@@ -38,20 +38,14 @@ public class ProtocolHandler {
 
     public void handleCallerDownStream(CallRequestEvent requestEvent, PacketEvent event) throws Throwable {
         event.setId(requestEvent.getId());
-        ByteBuffer buffer = ByteBuffer.allocateDirect(1024);
+        SafeBuffer buffer = new SafeBuffer(1024);
         buffer.putInt(requestEvent.getId());
-        byte[] clzNameByte = requestEvent.getClz().getName().getBytes();
-        buffer.putInt(clzNameByte.length);
-        buffer.put(clzNameByte);
-        byte[] methodNameByte = requestEvent.getMethod().getName().getBytes();
-        buffer.putInt(methodNameByte.length);
-        buffer.put(methodNameByte);
+        ChinaSerialize.writeString(requestEvent.getClz().getName(), buffer);
+        ChinaSerialize.writeString(requestEvent.getMethod().getName(), buffer);
         Class<?>[] parameterTypes = requestEvent.getMethod().getParameterTypes();
         buffer.putInt(parameterTypes.length);
         for (Class c : parameterTypes) {
-            byte[] b = c.getName().getBytes();
-            buffer.putInt(b.length);
-            buffer.put(b);
+            ChinaSerialize.writeString(c.getName(), buffer);
         }
         Object[] args = requestEvent.getArguments();
         int al = args.length;
@@ -63,7 +57,6 @@ public class ProtocolHandler {
         }
         event.setDestination(requestEvent.getDestination());
         event.setAvailableDestinations(requestEvent.getAvailableDestinations());
-        buffer.flip();
         event.setBuffer(buffer);
     }
 
@@ -74,16 +67,7 @@ public class ProtocolHandler {
      * @param responseEvent
      */
     public void handleCallerUpstream(PacketEvent packetEvent, CallResponseEvent responseEvent) throws Throwable {
-        /**
-         *发送请求失败
-         *
-         * 发生得原因：
-         * 1. 发送由于网络等原因失败，未能发送到对方
-         *
-         * 处理策略：
-         * 1. 上层对上层应用返回Null，同时打印出错误日志和堆栈
-         */
-        ByteBuffer buffer = packetEvent.getBuffer();
+        SafeBuffer buffer = packetEvent.getBuffer();
         int id = buffer.getInt();
         responseEvent.setId(id);
         responseEvent.setDestination(packetEvent.getDestination());
@@ -107,34 +91,21 @@ public class ProtocolHandler {
      */
     public void handleCalleeDownStream(CallResponseEvent responseEvent, PacketEvent event) throws Throwable {
         event.setId(responseEvent.getId());
-        ByteBuffer buffer = ByteBuffer.allocateDirect(1024);
+        SafeBuffer buffer = new SafeBuffer(1024);
         buffer.putInt(responseEvent.getId());
         ChinaSerialize.serialize("result", responseEvent.getValue(), buffer);
         ChinaSerialize.serialize("exception", responseEvent.getException(), buffer);
-        buffer.flip();
         event.setBuffer(buffer);
         event.setDestination(responseEvent.getDestination());
     }
 
     public void handleCalleeUpstream(PacketEvent packetEvent, CallRequestEvent requestEvent) throws Throwable {
-        /**
-         * 调用回应出错（网络失败等发送应答给对方失败）
-         *
-         * 服务端上层的处理策略：
-         * 1. 打印日志，客户端将会超时
-         */
-        ByteBuffer buffer = packetEvent.getBuffer();
+        SafeBuffer buffer = packetEvent.getBuffer();
         int id = buffer.getInt();
         requestEvent.setId(id);
-        int clzL = buffer.getInt();
-        byte[] clzNameB = new byte[clzL];
-        buffer.get(clzNameB);
-        String clzName = new String(clzNameB);
+        String clzName = ChinaSerialize.parseString(buffer);
         Class clz = Class.forName(clzName);
-        int mL = buffer.getInt();
-        byte[] mB = new byte[mL];
-        buffer.get(mB);
-        String methodName = new String(mB);
+        String methodName = ChinaSerialize.parseString(buffer);
         int pl = buffer.getInt();
         Class<?>[] argCls = new Class<?>[pl];
         for (int i = 0; i < pl; i++) {

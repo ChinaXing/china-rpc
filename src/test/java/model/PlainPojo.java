@@ -53,7 +53,7 @@ public class PlainPojo {
 
     @Override
     public String toString() {
-        return "model.ResultModel{" +
+        return "model.pojo{" +
                 "ok=" + ok +
                 ", msg='" + msg + '\'' +
                 '}';

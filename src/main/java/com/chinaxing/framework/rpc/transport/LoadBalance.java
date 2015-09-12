@@ -11,5 +11,7 @@ import java.util.List;
  * Created by LambdaCat on 15/8/24.
  */
 public interface LoadBalance {
-    String select(List<String> address);
+    String select(List<String> address) throws Throwable;
+
+    void setConnectionManager(ConnectionManager connectionManager);
 }

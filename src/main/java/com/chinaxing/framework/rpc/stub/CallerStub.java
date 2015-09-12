@@ -1,6 +1,7 @@
 package com.chinaxing.framework.rpc.stub;
 
 import com.chinaxing.framework.rpc.RemoteCallPromise;
+import com.chinaxing.framework.rpc.exception.CallException;
 import com.chinaxing.framework.rpc.model.CallRequestEvent;
 import com.chinaxing.framework.rpc.model.CallResponseEvent;
 import com.chinaxing.framework.rpc.model.EventContext;
@@ -14,6 +15,7 @@ import java.lang.reflect.Proxy;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -111,8 +113,14 @@ public class CallerStub {
                 callerPipeline.publish(ev);
                 Object r = promise.get(timeout, TimeUnit.MILLISECONDS);
                 promiseMap.remove(idx);
-                if (r instanceof Throwable) {
-                    throw (Throwable) r;
+                if (promise.isCancelled()) {
+                    throw new CancellationException("method : " + method + ",idx : " + idx);
+                }
+                if (promise.isFailure()) {
+                    if (promise.isException())
+                        throw new CallException("CallException", promise.getCause());
+                    else
+                        throw new CallException(promise.getReason());
                 }
                 return r;
             }
@@ -144,7 +152,7 @@ public class CallerStub {
             return;
         }
         if (event.getException() != null) {
-            promise.setFailure(event.getException().getMessage());
+            promise.setException(event.getException());
             return;
         }
         promise.setSuccess(event.getValue());

@@ -1,5 +1,7 @@
 package com.chinaxing.framework.rpc.model;
 
+import com.chinaxing.framework.rpc.protocol.SafeBuffer;
+
 import java.nio.ByteBuffer;
 import java.util.List;
 
@@ -11,7 +13,7 @@ public class PacketEvent {
     private String destination;
     private List<String> availableDestinations;
     private Throwable exception;
-    private ByteBuffer buffer;
+    private SafeBuffer buffer;
     private int id = -1;
 
     public void setId(int id) {
@@ -42,11 +44,11 @@ public class PacketEvent {
         this.destination = destination;
     }
 
-    public ByteBuffer getBuffer() {
+    public SafeBuffer getBuffer() {
         return buffer;
     }
 
-    public void setBuffer(ByteBuffer buffer) {
+    public void setBuffer(SafeBuffer buffer) {
         this.buffer = buffer;
     }
 

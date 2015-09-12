@@ -12,17 +12,21 @@ import java.util.concurrent.Executor;
 
 /**
  * 连接管理器
+ * <p/>
+ * 单例
  * Created by LambdaCat on 15/8/24.
  */
 public class ConnectionManager {
-    private static final ConcurrentHashMap<String, Connection> channelMap =
+    private final ConcurrentHashMap<String, Connection> channelMap =
             new ConcurrentHashMap<String, Connection>();
     private static final Logger logger = LoggerFactory.getLogger(ConnectionManager.class);
 
-    private static Executor ioExecutor;
+    private IoEventLoopGroup ioEventLoopGroup;
+    private ConnectionHandler connectionHandler;
 
-    public static void setIoExecutor(Executor ioExecutor) {
-        ConnectionManager.ioExecutor = ioExecutor;
+    public ConnectionManager(IoEventLoopGroup ioEventLoopGroup, ConnectionHandler handler) {
+        this.ioEventLoopGroup = ioEventLoopGroup;
+        this.connectionHandler = handler;
     }
 
     /**
@@ -33,13 +37,13 @@ public class ConnectionManager {
      * @throws IOException
      */
 
-    public static Connection getConnection(String destination) throws IOException {
+    public Connection getConnection(String destination) throws Throwable {
         Connection connection = channelMap.get(destination);
         if (connection == null) {
             synchronized (("ConnectionManager." + destination).intern()) {
                 connection = channelMap.get(destination);
                 if (connection == null) {
-                    connection = new Connection(destination, ioExecutor);
+                    connection = new Connection(destination, connectionHandler, ioEventLoopGroup.getIoEventLoop());
                     channelMap.put(destination, connection);
                 }
             }
@@ -53,23 +57,18 @@ public class ConnectionManager {
      * @param destination
      * @throws IOException
      */
-    public static void closeConnection(String destination) {
+    public void closeConnection(String destination) {
         Connection connection = channelMap.remove(destination);
         if (connection != null) {
             connection.close();
         }
     }
 
-
-    public static void addConnection(String destination, Connection connection) {
-        channelMap.put(destination, connection);
-    }
-
-    public static Connection addConnection(SocketChannel channel) throws IOException {
+    public Connection addConnection(SocketChannel channel) throws Throwable {
         InetSocketAddress socketAddress = (InetSocketAddress) channel.getRemoteAddress();
         String destination = socketAddress.getAddress().getHostAddress() + ":" + socketAddress.getPort();
-        Connection connection = new Connection(destination, channel, ioExecutor);
-        channelMap.put(destination, connection);
+        Connection connection = getConnection(destination);
+        connection.setChannel(channel);
         return connection;
     }
 }
