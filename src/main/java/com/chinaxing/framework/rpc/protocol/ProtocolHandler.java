@@ -109,11 +109,7 @@ public class ProtocolHandler {
         int pl = buffer.getInt();
         Class<?>[] argCls = new Class<?>[pl];
         for (int i = 0; i < pl; i++) {
-            int aCL = buffer.getInt();
-            byte[] aCB = new byte[aCL];
-            buffer.get(aCB);
-            String aCN = new String(aCB);
-            Class aC = getClass(aCN);
+            Class aC = getClass(ChinaSerialize.parseString(buffer));
             argCls[i] = aC;
         }
         Method method = clz.getMethod(methodName, argCls);

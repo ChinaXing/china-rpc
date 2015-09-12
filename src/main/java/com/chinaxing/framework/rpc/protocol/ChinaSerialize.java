@@ -1,6 +1,7 @@
 package com.chinaxing.framework.rpc.protocol;
 
 import com.chinaxing.framework.rpc.exception.SerializeException;
+import com.sun.xml.internal.ws.encoding.soap.DeserializationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -82,47 +83,8 @@ public class ChinaSerialize {
         Class clz = obj.getClass();
         Byte index = classCode.get(clz);
         if (index != null) {
-            buffer.put(index);
-            if (clz.equals(int.class) || clz.equals(Integer.class)) {
-                buffer.putInt(((Integer) obj));
-                return;
-            }
-            if (clz.equals(byte.class) || clz.equals(Byte.class)) {
-                buffer.put(((Byte) obj));
-                return;
-            }
-            if (clz.equals(char.class) || clz.equals(Character.class)) {
-                buffer.putChar(((Character) obj));
-                return;
-            }
-            if (clz.equals(short.class) || clz.equals(Short.class)) {
-                buffer.putShort(((Short) obj));
-                return;
-            }
-            if (clz.equals(long.class) || clz.equals(Long.class)) {
-                buffer.putLong(((Long) obj));
-                return;
-            }
-            if (clz.equals(double.class) || clz.equals(Double.class)) {
-                buffer.putDouble(((Double) obj));
-                return;
-            }
-            if (clz.equals(float.class) || clz.equals(Float.class)) {
-                buffer.putFloat(((Float) obj));
-                return;
-            }
-            if (clz.equals(boolean.class) || clz.equals(Boolean.class)) {
-                buffer.put(((Boolean) obj) ? (byte) 1 : (byte) 0);
-                return;
-            }
-            if (clz.equals(String.class)) {
-                writeString((String) obj, buffer);
-                return;
-            }
-            if (clz.equals(Date.class)) {
-                writeString(dateFormat.format((Date) obj), buffer);
-                return;
-            }
+            serializeBaseClass(index, clz, obj, buffer);
+            return;
         }
 
 
@@ -160,12 +122,33 @@ public class ChinaSerialize {
             return;
         }
 
+        if (Map.class.isAssignableFrom(clz)) {
+            serializeMap(clz, obj, buffer);
+            return;
+        }
+
         /**
          * 对象
          *
          * TODO 支持有参数的构造器
          */
 
+        serializeObject(clz, obj, buffer);
+    }
+
+    private static void serializeMap(Class clz, Object obj, SafeBuffer buffer) throws Throwable {
+        buffer.put(MAP);
+        writeString(clz.getName(), buffer);
+        buffer.putInt(((Map) obj).size());
+        Iterator<Map.Entry> iterator = ((Map) obj).entrySet().iterator();
+        while (iterator.hasNext()) {
+            Map.Entry entry = iterator.next();
+            serialize("k", entry.getKey(), buffer);
+            serialize("v", entry.getValue(), buffer);
+        }
+    }
+
+    private static void serializeObject(Class clz, Object obj, SafeBuffer buffer) throws Throwable {
         buffer.put(OBJECT);
         writeString(clz.getName(), buffer);
         /**
@@ -201,6 +184,51 @@ public class ChinaSerialize {
         }
     }
 
+    private static void serializeBaseClass(byte index,
+                                           Class clz, Object obj, SafeBuffer buffer) throws Throwable {
+        buffer.put(index);
+        if (clz.equals(int.class) || clz.equals(Integer.class)) {
+            buffer.putInt(((Integer) obj));
+            return;
+        }
+        if (clz.equals(byte.class) || clz.equals(Byte.class)) {
+            buffer.put(((Byte) obj));
+            return;
+        }
+        if (clz.equals(char.class) || clz.equals(Character.class)) {
+            buffer.putChar(((Character) obj));
+            return;
+        }
+        if (clz.equals(short.class) || clz.equals(Short.class)) {
+            buffer.putShort(((Short) obj));
+            return;
+        }
+        if (clz.equals(long.class) || clz.equals(Long.class)) {
+            buffer.putLong(((Long) obj));
+            return;
+        }
+        if (clz.equals(double.class) || clz.equals(Double.class)) {
+            buffer.putDouble(((Double) obj));
+            return;
+        }
+        if (clz.equals(float.class) || clz.equals(Float.class)) {
+            buffer.putFloat(((Float) obj));
+            return;
+        }
+        if (clz.equals(boolean.class) || clz.equals(Boolean.class)) {
+            buffer.put(((Boolean) obj) ? (byte) 1 : (byte) 0);
+            return;
+        }
+        if (clz.equals(String.class)) {
+            writeString((String) obj, buffer);
+            return;
+        }
+        if (clz.equals(Date.class)) {
+            writeString(dateFormat.format((Date) obj), buffer);
+            return;
+        }
+    }
+
     private static void serializeCollection(Class clz, Object obj, SafeBuffer buffer) throws Throwable {
         buffer.put(COLLECTION);
         /**
@@ -226,6 +254,45 @@ public class ChinaSerialize {
         return new DeSerializeResult(name, instance);
     }
 
+    private static DeSerializeResult deserializeException(String name, SafeBuffer buffer) throws Throwable {
+        /**
+         * exception class name
+         */
+        Class e = Class.forName(parseString(buffer));
+        Constructor c;
+        boolean withEx = false;
+        try {
+            c = e.getDeclaredConstructor(String.class);
+        } catch (Exception x) {
+            c = e.getDeclaredConstructor(Throwable.class, String.class);
+            withEx = true;
+        }
+        /**
+         * message
+         */
+        String msg = parseString(buffer);
+        /**
+         * stackTrace
+         */
+        DeSerializeResult stackTrace = deserialize(buffer);
+        Throwable t;
+        if (c.isAccessible()) {
+            if (withEx)
+                t = (Throwable) c.newInstance(null, msg);
+            else
+                t = (Throwable) c.newInstance(msg);
+        } else {
+            c.setAccessible(true);
+            if (withEx)
+                t = (Throwable) c.newInstance(null, msg);
+            else
+                t = (Throwable) c.newInstance(msg);
+            c.setAccessible(false);
+        }
+        t.setStackTrace((StackTraceElement[]) stackTrace.value);
+        return new DeSerializeResult(name, t);
+    }
+
     public static DeSerializeResult deserialize(SafeBuffer buffer) throws Throwable {
         String name = parseString(buffer);
         int code = buffer.get();
@@ -233,42 +300,7 @@ public class ChinaSerialize {
          * 异常
          */
         if (code == EXCEPTION) {
-            /**
-             * exception class name
-             */
-            Class e = Class.forName(parseString(buffer));
-            Constructor c;
-            boolean withEx = false;
-            try {
-                c = e.getDeclaredConstructor(String.class);
-            } catch (Exception x) {
-                c = e.getDeclaredConstructor(Throwable.class, String.class);
-                withEx = true;
-            }
-            /**
-             * message
-             */
-            String msg = parseString(buffer);
-            /**
-             * stackTrace
-             */
-            DeSerializeResult stackTrace = deserialize(buffer);
-            Throwable t;
-            if (c.isAccessible()) {
-                if (withEx)
-                    t = (Throwable) c.newInstance(null, msg);
-                else
-                    t = (Throwable) c.newInstance(msg);
-            } else {
-                c.setAccessible(true);
-                if (withEx)
-                    t = (Throwable) c.newInstance(null, msg);
-                else
-                    t = (Throwable) c.newInstance(msg);
-                c.setAccessible(false);
-            }
-            t.setStackTrace((StackTraceElement[]) stackTrace.value);
-            return new DeSerializeResult(name, t);
+            return deserializeException(name, buffer);
         }
 
         if (code == NULL) {
@@ -294,6 +326,10 @@ public class ChinaSerialize {
 
         if (code == COLLECTION) {
             return deSerializeCollection(name, buffer);
+        }
+
+        if (code == MAP) {
+            return deserializeMap(name, buffer);
         }
 
         if (code == OBJECT) { // 非原始类型
@@ -326,7 +362,28 @@ public class ChinaSerialize {
             }
             return new DeSerializeResult(name, obj);
         }
+
         Class clz = classIndex[code];
+        if (clz != null) {
+            return deSerializeBase(name, clz, buffer);
+        }
+        throw new SerializeException("unknown code : " + code);
+    }
+
+    private static DeSerializeResult deserializeMap(String name, SafeBuffer buffer) throws Throwable {
+        Class clz = Class.forName(parseString(buffer));
+        int size = buffer.getInt();
+        Map instance = (Map) clz.newInstance();
+        for (int i = 0; i < size; i++) {
+            DeSerializeResult k = deserialize(buffer);
+            DeSerializeResult v = deserialize(buffer);
+            instance.put(k.value, v.value);
+        }
+
+        return new DeSerializeResult(name, instance);
+    }
+
+    private static DeSerializeResult deSerializeBase(String name, Class clz, SafeBuffer buffer) throws Throwable {
         if (clz.equals(int.class) || clz.equals(Integer.class)) {
             return new DeSerializeResult(name, buffer.getInt());
         }
@@ -357,7 +414,8 @@ public class ChinaSerialize {
         if (clz.equals(Date.class)) {
             return new DeSerializeResult(name, dateFormat.parse(parseString(buffer)));
         }
-        throw new SerializeException("unknown code : " + code);
+
+        throw new SerializeException("unknown class : " + clz.getName());
     }
 
     private static Class parseArrayElementClass(SafeBuffer buffer) throws Throwable {
