@@ -39,7 +39,7 @@ public class IOEventLoop implements Runnable {
         connection.getChannel().configureBlocking(false);
         connection.getChannel().setOption(StandardSocketOptions.IP_TOS, 3);
         connection.getChannel().setOption(StandardSocketOptions.TCP_NODELAY, Boolean.TRUE);
-    
+
         connection.setState(READ_SIZE);
         SelectionKey k = connection.getChannel().register(selector, SelectionKey.OP_READ | SelectionKey.OP_WRITE);
         k.attach(connection);
@@ -166,15 +166,16 @@ public class IOEventLoop implements Runnable {
     public synchronized void close() {
         try {
             start = false;
-            if (selector.isOpen())
-                selector.close();
             for (SelectionKey k : selector.keys()) {
                 k.cancel();
                 ((Connection) k.attachment()).stop();
             }
-            selector = null;
+            if (selector.isOpen())
+                selector.close();
         } catch (Throwable e2) {
             logger.error("", e2);
+        } finally {
+            selector = null;
         }
     }
 
