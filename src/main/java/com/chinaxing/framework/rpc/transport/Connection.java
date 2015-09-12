@@ -113,6 +113,11 @@ public class Connection {
 
     public synchronized void close() {
         start = false;
+        try {
+            ioEventLoop.cancel(channel);
+        } catch (Throwable t) {
+            logger.error("", t);
+        }
         channel = null;
         Q.clear();
     }

@@ -48,7 +48,7 @@ public class CallerPipeline implements Pipeline<PacketEvent, CallRequestEvent> {
     private RingBuffer<PacketEvent> upStreamPacketEventRingBuffer;
     private RingBuffer<CallResponseEvent> callResponseEventRingBuffer;
 
-    public CallerPipeline(Executor executor, IoEventLoopGroup ioEventLoopGroup,int capacity, LoadBalance loadBalance) {
+    public CallerPipeline(Executor executor, IoEventLoopGroup ioEventLoopGroup, int capacity, LoadBalance loadBalance) {
         this.executor = executor;
         this.capacity = capacity;
         this.loadBalance = loadBalance;
@@ -101,12 +101,24 @@ public class CallerPipeline implements Pipeline<PacketEvent, CallRequestEvent> {
          * 如果序列化失败，则以Exception 响应调用者
          */
         callRequestEventDisruptor.handleEventsWith(new EventHandler<CallRequestEvent>() {
+            private boolean unPublished = false;
+            private long prev;
+
             public void onEvent(CallRequestEvent event, long sequence, boolean endOfBatch) throws Exception {
-                long seq = downStreamPacketEventRingBuffer.next();
+                long seq;
+                if (unPublished) {
+                    seq = prev;
+                } else {
+                    seq = downStreamPacketEventRingBuffer.next();
+                }
                 PacketEvent packetEvent = downStreamPacketEventRingBuffer.get(seq);
                 try {
                     protocolHandler.handleCallerDownStream(event, packetEvent);
                 } catch (Throwable t) {
+                    if (!unPublished) {
+                        unPublished = true;
+                        prev = seq;
+                    }
                     CallResponseEvent resp = new CallResponseEvent();
                     resp.setId(event.getId());
                     resp.setException(t);
@@ -114,6 +126,7 @@ public class CallerPipeline implements Pipeline<PacketEvent, CallRequestEvent> {
                     return;
                 }
                 downStreamPacketEventRingBuffer.publish(seq);
+                if (unPublished) unPublished = false;
             }
         });
 
@@ -141,12 +154,24 @@ public class CallerPipeline implements Pipeline<PacketEvent, CallRequestEvent> {
          * 如果解析响应失败，则以Exception 响应
          */
         upStreamPacketEventDisruptor.handleEventsWith(new EventHandler<PacketEvent>() {
+            private boolean unPublished = false;
+            private long prev;
+
             public void onEvent(PacketEvent event, long sequence, boolean endOfBatch) throws Exception {
-                long seq = callResponseEventRingBuffer.next();
+                long seq;
+                if (unPublished) {
+                    seq = prev;
+                } else {
+                    seq = callResponseEventRingBuffer.next();
+                }
                 CallResponseEvent ev = callResponseEventRingBuffer.get(seq);
                 try {
                     protocolHandler.handleCallerUpstream(event, ev);
                 } catch (Throwable t) {
+                    if (!unPublished) {
+                        unPublished = true;
+                        prev = seq;
+                    }
                     logger.error("protocolHandler exception : {}", event);
                     logger.error(" ", t);
                     if (ev.getId() == -1)
@@ -154,6 +179,7 @@ public class CallerPipeline implements Pipeline<PacketEvent, CallRequestEvent> {
                     ev.setException(t);
                 }
                 callResponseEventRingBuffer.publish(seq);
+                if (unPublished) unPublished = false;
             }
         });
 

@@ -18,6 +18,9 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.concurrent.Executor;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * 被调用方的处理链条
@@ -99,12 +102,24 @@ public class CalleePipeline implements Pipeline<PacketEvent, CallResponseEvent> 
          * 如果发生异常，则跟如Id进行决定响应
          */
         upStreamPacketEventDisruptor.handleEventsWith(new EventHandler<PacketEvent>() {
+            private boolean unPublished = false;
+            private long prev;
+
             public void onEvent(PacketEvent event, long sequence, boolean endOfBatch) throws Exception {
-                long seq = callRequestEventRingBuffer.next();
+                long seq;
+                if (unPublished) {
+                    seq = prev;
+                } else {
+                    seq = callRequestEventRingBuffer.next();
+                }
                 CallRequestEvent ev = callRequestEventRingBuffer.get(seq);
                 try {
                     protocolHandler.handleCalleeUpstream(event, ev);
                 } catch (Throwable t) {
+                    if (!unPublished) {
+                        unPublished = true;
+                        prev = seq;
+                    }
                     if (ev.getId() == -1) {
                         logger.error("", t);
                         return;
@@ -118,6 +133,7 @@ public class CalleePipeline implements Pipeline<PacketEvent, CallResponseEvent> 
                     return;
                 }
                 callRequestEventRingBuffer.publish(seq);
+                if (unPublished) unPublished = false;
             }
         });
 
@@ -152,12 +168,24 @@ public class CalleePipeline implements Pipeline<PacketEvent, CallResponseEvent> 
          * 如果失败，则异常返回给调用者
          */
         callResponseEventDisruptor.handleEventsWith(new EventHandler<CallResponseEvent>() {
+            private boolean unPublished = false;
+            private long prev;
+
             public void onEvent(CallResponseEvent event, long sequence, boolean endOfBatch) throws Exception {
-                long seq = downStreamPacketEventRingBuffer.next();
+                long seq;
+                if (unPublished) {
+                    seq = prev;
+                } else {
+                    seq = downStreamPacketEventRingBuffer.next();
+                }
                 PacketEvent ev = downStreamPacketEventRingBuffer.get(seq);
                 try {
                     protocolHandler.handleCalleeDownStream(event, ev);
                 } catch (Throwable t) {
+                    if (!unPublished) {
+                        unPublished = true;
+                        prev = seq;
+                    }
                     logger.error("exception on protocol ev : {}", event);
                     long seq2 = callResponseEventRingBuffer.next();
                     CallResponseEvent resp = callResponseEventRingBuffer.get(seq2);
@@ -168,6 +196,7 @@ public class CalleePipeline implements Pipeline<PacketEvent, CallResponseEvent> 
                     return;
                 }
                 downStreamPacketEventRingBuffer.publish(seq);
+                if (unPublished) unPublished = false;
             }
         });
 
