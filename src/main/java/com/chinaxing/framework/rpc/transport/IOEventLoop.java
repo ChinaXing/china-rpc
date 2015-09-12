@@ -5,6 +5,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import sun.io.ByteToCharUnicodeBigUnmarked;
 
+import java.net.SocketOption;
+import java.net.StandardSocketOptions;
 import java.nio.ByteBuffer;
 import java.nio.channels.*;
 import java.util.Set;
@@ -35,6 +37,9 @@ public class IOEventLoop implements Runnable {
     public synchronized void register(Connection connection) throws Throwable {
         if (!start) start();
         connection.getChannel().configureBlocking(false);
+        connection.getChannel().setOption(StandardSocketOptions.IP_TOS, 3);
+        connection.getChannel().setOption(StandardSocketOptions.TCP_NODELAY, Boolean.TRUE);
+    
         connection.setState(READ_SIZE);
         SelectionKey k = connection.getChannel().register(selector, SelectionKey.OP_READ | SelectionKey.OP_WRITE);
         k.attach(connection);
