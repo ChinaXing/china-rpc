@@ -30,7 +30,7 @@ public class ChinaSerialize {
     };
     private static Map<String, Class> primitiveClass = new HashMap<String, Class>();
 
-    private static final DateFormat dateFormat = new SimpleDateFormat();
+//    private static final DateFormat dateFormat = new SimpleDateFormat();
 
     static {
         for (byte i = 0; i < classIndex.length; i++) {
@@ -223,7 +223,7 @@ public class ChinaSerialize {
             return;
         }
         if (clz.equals(Date.class)) {
-            writeString(dateFormat.format((Date) obj), buffer);
+            buffer.putLong(((Date) obj).getTime());
             return;
         }
     }
@@ -419,7 +419,7 @@ public class ChinaSerialize {
             return new DeSerializeResult(name, parseString(buffer));
         }
         if (clz.equals(Date.class)) {
-            return new DeSerializeResult(name, dateFormat.parse(parseString(buffer)));
+            return new DeSerializeResult(name, new Date(buffer.getLong()));
         }
 
         throw new SerializeException("unknown class : " + clz.getName());
