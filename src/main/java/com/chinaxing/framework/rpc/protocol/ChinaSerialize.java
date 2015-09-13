@@ -92,7 +92,7 @@ public class ChinaSerialize {
          */
         if (clz.isEnum()) {
             buffer.put(ENUM);
-            writeClassName(clz, buffer);
+            writeString(clz.getName(), buffer);
             String en = ((Enum) obj).name();
             byte[] enB = en.getBytes();
             buffer.putInt(enB.length);
