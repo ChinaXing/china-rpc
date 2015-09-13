@@ -1,7 +1,6 @@
 package com.chinaxing.framework.rpc.protocol;
 
 import com.chinaxing.framework.rpc.exception.SerializeException;
-import com.sun.xml.internal.ws.encoding.soap.DeserializationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
