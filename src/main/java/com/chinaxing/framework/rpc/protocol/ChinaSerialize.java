@@ -246,7 +246,15 @@ public class ChinaSerialize {
     private static DeSerializeResult deSerializeCollection(String name, SafeBuffer buffer) throws Throwable {
         Class c = Class.forName(parseString(buffer));
         int size = buffer.getInt();
-        Collection instance = (Collection) c.newInstance();
+        Collection instance;
+        Constructor cstr = c.getDeclaredConstructor();
+        if (cstr.isAccessible()) {
+            instance = (Collection) cstr.newInstance();
+        } else {
+            cstr.setAccessible(true);
+            instance = (Collection) cstr.newInstance();
+            cstr.setAccessible(false);
+        }
         for (int i = 0; i < size; i++) {
             DeSerializeResult e = deserialize(buffer);
             instance.add(e.value);
