@@ -62,7 +62,7 @@ public class IOEventLoop implements Runnable {
         try {
             while (start) {
                 try {
-                    selector.select();
+                    selector.select(1000);
                     Set<SelectionKey> selected = selector.selectedKeys();
                     SELECT_KEY:
                     for (SelectionKey k : selected) {
