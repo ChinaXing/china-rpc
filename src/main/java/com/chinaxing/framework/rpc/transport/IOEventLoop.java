@@ -10,7 +10,9 @@ import java.net.SocketOption;
 import java.net.StandardSocketOptions;
 import java.nio.ByteBuffer;
 import java.nio.channels.*;
+import java.util.Iterator;
 import java.util.Set;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.Executor;
 
 /**
@@ -23,6 +25,7 @@ public class IOEventLoop implements Runnable {
     private Executor executor;
     private static final int READ_SIZE = 1;
     private static final int READ_DATA = 2;
+    private ConcurrentLinkedQueue<Connection> registerQ = new ConcurrentLinkedQueue<Connection>();
 
     public IOEventLoop(Executor executor) {
         this.executor = executor;
@@ -45,9 +48,27 @@ public class IOEventLoop implements Runnable {
         connection.getChannel().setOption(StandardSocketOptions.TCP_NODELAY, Boolean.TRUE);
         connection.setState(READ_SIZE);
         if (selector == null || !selector.isOpen()) buildSelector();
-        connection.getChannel().register(selector, SelectionKey.OP_READ | SelectionKey.OP_WRITE, connection);
+        registerQ.add(connection);
         if (!start) start();
+        selector.wakeup();
     }
+
+
+    /**
+     * 注意NIO的线程安全性，NIO的register和select等操作需要在一个线程中进行，否则会block
+     */
+    private void doRegisterChannels() {
+        while (true) {
+            try {
+                Connection connection = registerQ.poll();
+                if (connection == null) return;
+                connection.getChannel().register(selector, SelectionKey.OP_READ | SelectionKey.OP_WRITE, connection);
+            } catch (ClosedChannelException e) {
+                logger.error("Channel closed when we register it : {}", e);
+            }
+        }
+    }
+
 
     public void cancel(SocketChannel channel) throws Throwable {
         if (channel.isRegistered()) {
@@ -62,10 +83,14 @@ public class IOEventLoop implements Runnable {
         try {
             while (start) {
                 try {
-                    selector.select(1000);
-                    Set<SelectionKey> selected = selector.selectedKeys();
+                    int count = selector.select(1000);
+                    doRegisterChannels();
+                    if (count == 0) continue;
+                    Iterator<SelectionKey> selected = selector.selectedKeys().iterator();
                     SELECT_KEY:
-                    for (SelectionKey k : selected) {
+                    while (selected.hasNext()) {
+                        SelectionKey k = selected.next();
+                        selected.remove();
                         if (k.isReadable()) {
                             SocketChannel channel = (SocketChannel) k.channel();
                             Connection connection = (Connection) k.attachment();
