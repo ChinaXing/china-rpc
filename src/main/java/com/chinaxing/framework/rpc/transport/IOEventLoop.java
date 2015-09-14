@@ -5,6 +5,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import sun.io.ByteToCharUnicodeBigUnmarked;
 
+import java.io.IOException;
 import java.net.SocketOption;
 import java.net.StandardSocketOptions;
 import java.nio.ByteBuffer;
@@ -29,19 +30,23 @@ public class IOEventLoop implements Runnable {
 
     public synchronized void start() throws Throwable {
         if (start) return;
-        selector = Selector.open();
         start = true;
+        if (selector == null || !selector.isOpen()) buildSelector();
         executor.execute(this);
     }
 
+    private void buildSelector() throws Throwable {
+        selector = Selector.open();
+    }
+
     public synchronized void register(Connection connection) throws Throwable {
-        if (!start) start();
         connection.getChannel().configureBlocking(false);
         connection.getChannel().setOption(StandardSocketOptions.IP_TOS, 3);
         connection.getChannel().setOption(StandardSocketOptions.TCP_NODELAY, Boolean.TRUE);
-
         connection.setState(READ_SIZE);
+        if (selector == null || !selector.isOpen()) buildSelector();
         connection.getChannel().register(selector, SelectionKey.OP_READ | SelectionKey.OP_WRITE, connection);
+        if (!start) start();
     }
 
     public void cancel(SocketChannel channel) throws Throwable {
@@ -57,7 +62,7 @@ public class IOEventLoop implements Runnable {
         try {
             while (start) {
                 try {
-                    selector.select(500);
+                    selector.select();
                     Set<SelectionKey> selected = selector.selectedKeys();
                     SELECT_KEY:
                     for (SelectionKey k : selected) {
