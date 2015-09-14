@@ -32,7 +32,7 @@ public class CallerStub {
     private final AtomicInteger index = new AtomicInteger(0);
     private ServiceProvider serviceProvider;
     private final Map<Class, Object> proxyCache = new HashMap<Class, Object>();
-    private final Map<Class, Object> uniqueProxyCache = new HashMap<Class, Object>();
+    private final Map<String, Object> uniqueProxyCache = new HashMap<String, Object>();
     private CallerPipeline callerPipeline;
     private final ConcurrentHashMap<Integer, RemoteCallPromise> promiseMap = new ConcurrentHashMap<Integer, RemoteCallPromise>();
     private long timeout = 3000;
@@ -96,7 +96,7 @@ public class CallerStub {
      * @return
      */
     public synchronized <T> T refer(final Class<T> service, final String address) {
-        Object proxy = uniqueProxyCache.get(service);
+        Object proxy = uniqueProxyCache.get(service.getName() + "#" + address);
         if (proxy != null) return (T) proxy;
         proxy = Proxy.newProxyInstance(this.getClass().getClassLoader(), new Class[]{service}, new InvocationHandler() {
             public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
@@ -125,7 +125,7 @@ public class CallerStub {
                 return r;
             }
         });
-        uniqueProxyCache.put(service, proxy);
+        uniqueProxyCache.put(service.getName() + "#" + address, proxy);
         return (T) proxy;
     }
 
