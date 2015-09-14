@@ -41,8 +41,7 @@ public class IOEventLoop implements Runnable {
         connection.getChannel().setOption(StandardSocketOptions.TCP_NODELAY, Boolean.TRUE);
 
         connection.setState(READ_SIZE);
-        SelectionKey k = connection.getChannel().register(selector, SelectionKey.OP_READ | SelectionKey.OP_WRITE);
-        k.attach(connection);
+        connection.getChannel().register(selector, SelectionKey.OP_READ | SelectionKey.OP_WRITE, connection);
     }
 
     public void cancel(SocketChannel channel) throws Throwable {
@@ -65,6 +64,10 @@ public class IOEventLoop implements Runnable {
                         if (k.isReadable()) {
                             SocketChannel channel = (SocketChannel) k.channel();
                             Connection connection = (Connection) k.attachment();
+                            if (connection == null) {
+                                logger.error("Connection of channel : {} is NULL, ignore !", channel);
+                                continue;
+                            }
                             DO_READ:
                             while (true) {
                                 switch (connection.getState()) {
@@ -130,6 +133,10 @@ public class IOEventLoop implements Runnable {
                         if (k.isWritable()) {
                             SocketChannel channel = (SocketChannel) k.channel();
                             Connection connection = (Connection) k.attachment();
+                            if (connection == null) {
+                                logger.error("Connection of channel : {} is NULL, ignore !", channel);
+                                continue;
+                            }
                             while (true) {
                                 ByteBuffer buffer = connection.peekData();
                                 if (buffer != null) {
