@@ -31,7 +31,7 @@ public class Connection {
     private volatile boolean start = false;
     private SafeBuffer buffer;
     private final ByteBuffer lBuf = ByteBuffer.allocate(16);
-    private int state;
+    private volatile int state;
 
     public int getState() {
         return state;

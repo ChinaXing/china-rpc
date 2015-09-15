@@ -1,4 +1,5 @@
 import com.chinaxing.framework.rpc.ChinaRPC;
+import com.chinaxing.framework.rpc.model.WaitType;
 import impl.ArrayServiceImpl;
 import org.junit.Before;
 import org.junit.Test;
@@ -16,7 +17,9 @@ public abstract class TestRPC {
     public void testAppointCall() throws Throwable {
         rpc = ChinaRPC.getBuilder().setTimeout(300000)
                 .setCallExecutorCount(10)
-                .setIoEventLoopCount(4).build();
+                .setIoEventLoopCount(4)
+                .setWaitType(WaitType.LITE_BLOCK)
+                .build();
     }
 
     @Test

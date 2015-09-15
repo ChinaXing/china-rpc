@@ -1,11 +1,12 @@
 package com.chinaxing.framework.rpc;
 
+import com.chinaxing.framework.rpc.exception.IllegalSettingsException;
+import com.chinaxing.framework.rpc.model.WaitType;
 import com.chinaxing.framework.rpc.pipeline.CalleePipeline;
 import com.chinaxing.framework.rpc.pipeline.CallerPipeline;
 import com.chinaxing.framework.rpc.stub.CalleeStub;
 import com.chinaxing.framework.rpc.stub.CallerStub;
 import com.chinaxing.framework.rpc.stub.ServiceProvider;
-import com.chinaxing.framework.rpc.transport.ConnectionManager;
 import com.chinaxing.framework.rpc.transport.IoEventLoopGroup;
 import com.chinaxing.framework.rpc.transport.LoadBalance;
 import com.chinaxing.framework.rpc.transport.RRLoadBalance;
@@ -14,7 +15,7 @@ import java.io.IOException;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
-import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -29,43 +30,43 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 public class ChinaRPC {
     private final long timeout;
-    private final Executor ioExecutor;
-    private final IoEventLoopGroup ioEventLoopGroup;
+    private final int callExecutorCount;
+    private final int ioEventLoopCount;
     private CalleeStub calleeStub;
     private CallerStub callerStub;
     private ServiceProvider provider;
     private String host;
     private int listen;
-    private Executor callExecutor;
     private LoadBalance loadBalance;
+    private WaitType waitType;
 
     private ChinaRPC(ServiceProvider provider, long timeout, int ioEventLoopCount,
-                     int callExecutorCount, LoadBalance loadBalance, String host, int listen) {
+                     int callExecutorCount, LoadBalance loadBalance,
+                     String host, int listen, WaitType waitType) {
         this.provider = provider;
         this.timeout = timeout;
-        callExecutor = Executors.newFixedThreadPool(callExecutorCount, new ThreadFactory() {
-            private final AtomicInteger index = new AtomicInteger(0);
-
-            public Thread newThread(Runnable r) {
-                return new Thread(r, "ChinaRPC-callExec-" + index.getAndIncrement());
-            }
-        });
-        ioExecutor = Executors.newFixedThreadPool(ioEventLoopCount, new ThreadFactory() {
-            private final AtomicInteger index = new AtomicInteger(0);
-
-            public Thread newThread(Runnable r) {
-                return new Thread(r, "ChinaRPC-ioExec-" + index.getAndIncrement());
-            }
-        });
         this.loadBalance = loadBalance;
         this.listen = listen;
         this.host = host;
-        this.ioEventLoopGroup = new IoEventLoopGroup(ioEventLoopCount, ioExecutor);
+        this.ioEventLoopCount = ioEventLoopCount;
+        this.waitType = waitType;
+        this.callExecutorCount = callExecutorCount;
+    }
+
+    private Executor buildExecutor(int count, final String name) {
+        return Executors.newFixedThreadPool(count, new ThreadFactory() {
+            private final AtomicInteger index = new AtomicInteger(0);
+
+            public Thread newThread(Runnable r) {
+                return new Thread(r, "ChinaRPC-" + name + "-" + index.getAndIncrement());
+            }
+        });
     }
 
     private CallerStub callerStub() throws IOException {
         if (callerStub == null) {
-            CallerPipeline callerPipeline = new CallerPipeline(callExecutor, ioEventLoopGroup, 1024, loadBalance);
+            IoEventLoopGroup ioEventLoopGroup = new IoEventLoopGroup(ioEventLoopCount, buildExecutor(ioEventLoopCount, "CallerIo"));
+            CallerPipeline callerPipeline = new CallerPipeline(buildExecutor(callExecutorCount, "CallerExec"), waitType, ioEventLoopGroup, 1024, loadBalance);
             callerStub = new CallerStub(provider, callerPipeline, timeout);
             callerPipeline.setStub(callerStub);
             callerPipeline.start();
@@ -76,7 +77,8 @@ public class ChinaRPC {
 
     private CalleeStub calleeStub() throws IOException {
         if (calleeStub == null) {
-            CalleePipeline calleePipeline = new CalleePipeline(callExecutor, ioEventLoopGroup, 1024, host, listen);
+            IoEventLoopGroup ioEventLoopGroup = new IoEventLoopGroup(ioEventLoopCount, buildExecutor(ioEventLoopCount, "CalleeIo"));
+            CalleePipeline calleePipeline = new CalleePipeline(buildExecutor(callExecutorCount, "CalleeExec"), waitType, callExecutorCount, ioEventLoopGroup, 1024, host, listen);
             calleeStub = new CalleeStub(calleePipeline);
             calleePipeline.setStub(calleeStub);
             calleePipeline.start();
@@ -92,6 +94,16 @@ public class ChinaRPC {
         private LoadBalance loadBalance = new RRLoadBalance();
         private int ioEventLoopCount = Runtime.getRuntime().availableProcessors() * 2 - 1;
         private int callExecutorCount = 8;
+        private WaitType waitType = WaitType.YIELD;
+
+        public WaitType getWaitType() {
+            return waitType;
+        }
+
+        public ChinaRPCBuilder setWaitType(WaitType waitType) {
+            this.waitType = waitType;
+            return this;
+        }
 
         private ChinaRPCBuilder() {
         }
@@ -111,8 +123,30 @@ public class ChinaRPC {
             return this;
         }
 
-        public ChinaRPC build() {
-            return new ChinaRPC(serviceProvider, timeout, ioEventLoopCount, callExecutorCount, loadBalance, host, listen);
+        public ChinaRPC build() throws IllegalSettingsException {
+            check();
+            return new ChinaRPC(
+                    serviceProvider,
+                    timeout,
+                    ioEventLoopCount,
+                    callExecutorCount,
+                    loadBalance,
+                    host,
+                    listen,
+                    waitType
+            );
+        }
+
+        private void check() throws IllegalSettingsException {
+            if (callExecutorCount < 4) {
+                throw new IllegalSettingsException("callExecutorCount", callExecutorCount, " must big than 4");
+            }
+            if (ioEventLoopCount < 1) {
+                throw new IllegalSettingsException("ioEventLoopCount", ioEventLoopCount, " must > 1");
+            }
+            if (timeout < 0) {
+                throw new IllegalSettingsException("timeout", timeout, " must > 0");
+            }
         }
 
         public ChinaRPCBuilder setListen(int listen) {

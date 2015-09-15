@@ -1,7 +1,5 @@
 package com.chinaxing.framework.rpc.protocol;
 
-import sun.io.ByteToCharUnicodeBigUnmarked;
-
 import java.nio.BufferOverflowException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -11,6 +9,12 @@ import java.util.List;
  * 经过封装的安全buffer，自动增长
  * <p/>
  * Buffer中第一个Int代表长度
+ * <p/>
+ * <p/>
+ * 读：读取的时候认为SafeBuffer仅仅有一个ByteBuffer——current，主要是因为网络IO的时候会一次性读进来
+ * 写：写入的时候，SafeBuffer有若干个size大小的ByteBuffer组成，写保证安全性——自动按需增长
+ * <p/>
+ * 获取写入后的buffer list：{@code getBuffers}
  * <p/>
  * <p/>
  * Created by LambdaCat on 15/9/12.
@@ -152,21 +156,24 @@ public class SafeBuffer {
     }
 
     /**
-     * assert bs.size < size
-     *
      * @param bs
      */
     public void put(byte[] bs) {
-        assert bs.length <= size;
-        try {
-            current.put(bs);
-        } catch (BufferOverflowException e) {
-            current.flip();
-            position += current.limit();
-            buffers.add(current);
-            current = alloc();
-            current.put(bs);
+        put(bs, 0, bs.length);
+    }
+
+    public void put(byte[] bs, int from, int len) {
+        int capacity = current.remaining();
+        if (capacity >= len) {
+            current.put(bs, from, len);
+            return;
         }
+        current.put(bs, from, capacity);
+        current.flip();
+        position += current.limit();
+        buffers.add(current);
+        current = alloc();
+        put(bs, from + capacity, len - capacity);
     }
 
     public ByteBuffer[] getBuffers() {
@@ -201,16 +208,21 @@ public class SafeBuffer {
     }
 
     public void put(ByteBuffer b) {
-        try {
+        int rem0 = current.remaining();
+        int rem1 = b.remaining();
+        if (rem0 >= rem1) {
             current.put(b);
-        } catch (BufferOverflowException e) {
-            current.flip();
-            position += current.limit();
-            buffers.add(current);
-            current = alloc();
-            current.put(b);
-
+            return;
         }
+        int limit = b.limit();
+        b.limit(rem0 + b.position());
+        current.put(b);
+        b.limit(limit);
+        current.flip();
+        position += current.limit();
+        buffers.add(current);
+        current = alloc();
+        put(b);
     }
 
     public boolean hasRemaining() {

@@ -1,18 +1,14 @@
 package com.chinaxing.framework.rpc.pipeline;
 
 import com.chinaxing.framework.rpc.DefaultExceptionHandler;
-import com.chinaxing.framework.rpc.model.CallRequestEvent;
-import com.chinaxing.framework.rpc.model.CallResponseEvent;
-import com.chinaxing.framework.rpc.model.EventContext;
-import com.chinaxing.framework.rpc.model.PacketEvent;
+import com.chinaxing.framework.rpc.model.*;
 import com.chinaxing.framework.rpc.protocol.ProtocolHandler;
 import com.chinaxing.framework.rpc.stub.CalleeStub;
 import com.chinaxing.framework.rpc.transport.IoEventLoopGroup;
 import com.chinaxing.framework.rpc.transport.TransportHandler;
-import com.lmax.disruptor.EventFactory;
-import com.lmax.disruptor.EventHandler;
-import com.lmax.disruptor.RingBuffer;
+import com.lmax.disruptor.*;
 import com.lmax.disruptor.dsl.Disruptor;
+import com.lmax.disruptor.dsl.ProducerType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -37,6 +33,9 @@ public class CalleePipeline implements Pipeline<PacketEvent, CallResponseEvent> 
     private final int capacity;
     private final int port;
     private final String host;
+    private final int callThreadNum;
+    private final WaitType waitType;
+    private final int callExecThreadNum;
     private Disruptor<CallRequestEvent> callRequestEventDisruptor;
     private Disruptor<PacketEvent> downStreamPacketEventDisruptor;
     private Disruptor<PacketEvent> upStreamPacketEventDisruptor;
@@ -50,12 +49,15 @@ public class CalleePipeline implements Pipeline<PacketEvent, CallResponseEvent> 
     private RingBuffer<CallResponseEvent> callResponseEventRingBuffer;
 
 
-    public CalleePipeline(Executor executor, IoEventLoopGroup ioEventLoopGroup, int capacity, String host, int port) {
+    public CalleePipeline(Executor executor, WaitType waitType,
+                          int callThreadNum, IoEventLoopGroup ioEventLoopGroup, int capacity, String host, int port) {
         this.executor = executor;
         this.capacity = capacity;
+        this.callThreadNum = callThreadNum;
+        this.callExecThreadNum = callThreadNum - 3;
         this.host = host;
         this.port = port;
-
+        this.waitType = waitType;
         transportHandler = new TransportHandler(this, ioEventLoopGroup, null);
         init();
     }
@@ -65,30 +67,42 @@ public class CalleePipeline implements Pipeline<PacketEvent, CallResponseEvent> 
     }
 
     private void init() {
-        callRequestEventDisruptor = new Disruptor<CallRequestEvent>(new EventFactory<CallRequestEvent>() {
-            public CallRequestEvent newInstance() {
-                return new CallRequestEvent();
-            }
-        }, capacity, executor);
-
-        downStreamPacketEventDisruptor = new Disruptor<PacketEvent>(new EventFactory<PacketEvent>() {
-            public PacketEvent newInstance() {
-                return new PacketEvent();
-            }
-        }, capacity, executor);
-
+        /**
+         * 请求
+         */
         upStreamPacketEventDisruptor = new Disruptor<PacketEvent>(new EventFactory<PacketEvent>() {
             public PacketEvent newInstance() {
                 return new PacketEvent();
             }
-        }, capacity, executor);
+        }, capacity, executor, ProducerType.MULTI, getWaitStrategy());
+
+        callRequestEventDisruptor = new Disruptor<CallRequestEvent>(new EventFactory<CallRequestEvent>() {
+            public CallRequestEvent newInstance() {
+                return new CallRequestEvent();
+            }
+        }, capacity, executor, ProducerType.SINGLE, getWaitStrategy());
+
+
+        /**
+         * 应答
+         */
+        downStreamPacketEventDisruptor = new Disruptor<PacketEvent>(new EventFactory<PacketEvent>() {
+            public PacketEvent newInstance() {
+                return new PacketEvent();
+            }
+        }, capacity, executor, ProducerType.MULTI, getWaitStrategy());
+
 
         callResponseEventDisruptor = new Disruptor<CallResponseEvent>(new EventFactory<CallResponseEvent>() {
             public CallResponseEvent newInstance() {
                 return new CallResponseEvent();
             }
-        }, capacity, executor);
+        }, capacity, executor, ProducerType.MULTI, getWaitStrategy());
 
+
+        /**
+         * Exception handle
+         */
         callRequestEventDisruptor.handleExceptionsWith(new DefaultExceptionHandler<CallRequestEvent>(callRequestEventDisruptor));
         downStreamPacketEventDisruptor.handleExceptionsWith(new DefaultExceptionHandler<PacketEvent>(downStreamPacketEventDisruptor));
         callResponseEventDisruptor.handleExceptionsWith(new DefaultExceptionHandler<CallResponseEvent>(callResponseEventDisruptor));
@@ -139,12 +153,17 @@ public class CalleePipeline implements Pipeline<PacketEvent, CallResponseEvent> 
 
         /**
          * 请求上行的最后一站——执行服务调用
+         *
+         * 此处需要用到线程池进行并发消费——多消费者
          */
-        callRequestEventDisruptor.handleEventsWith(new EventHandler<CallRequestEvent>() {
-            public void onEvent(CallRequestEvent event, long sequence, boolean endOfBatch) throws Exception {
-                stub.call(event);
-            }
-        });
+        WorkHandler<CallRequestEvent>[] callRequestEventHandlers = new WorkHandler[callExecThreadNum];
+        for (int i = 0; i < callExecThreadNum; i++)
+            callRequestEventHandlers[i] = new WorkHandler<CallRequestEvent>() {
+                public void onEvent(CallRequestEvent event) throws Exception {
+                    stub.call(event);
+                }
+            };
+        callRequestEventDisruptor.handleEventsWithWorkerPool(callRequestEventHandlers);
 
         /**
          * 响应的最后一站——传输
@@ -210,6 +229,13 @@ public class CalleePipeline implements Pipeline<PacketEvent, CallResponseEvent> 
         transportHandler.startServer(host, port);
     }
 
+    public void shutdown() throws IOException {
+        callRequestEventDisruptor.shutdown();
+        callResponseEventDisruptor.shutdown();
+        upStreamPacketEventDisruptor.shutdown();
+        downStreamPacketEventDisruptor.shutdown();
+    }
+
     public EventContext<PacketEvent> up() {
         long seq = upStreamPacketEventRingBuffer.next();
         return new EventContext<PacketEvent>(seq, upStreamPacketEventRingBuffer.get(seq));
@@ -230,5 +256,21 @@ public class CalleePipeline implements Pipeline<PacketEvent, CallResponseEvent> 
             return;
         }
         logger.error("invalid event type : {}", eventContext.getEvent().getClass().getName());
+    }
+
+    private WaitStrategy getWaitStrategy() {
+        switch (waitType) {
+            case BLOCK:
+                return new BlockingWaitStrategy();
+            case YIELD:
+                return new YieldingWaitStrategy();
+            case LITE_BLOCK:
+                return new LiteBlockingWaitStrategy();
+            case SLEEP:
+                return new SleepingWaitStrategy();
+            case SPIN:
+                return new BusySpinWaitStrategy();
+        }
+        return new LiteBlockingWaitStrategy();
     }
 }

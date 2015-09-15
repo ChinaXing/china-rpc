@@ -1,19 +1,15 @@
 package com.chinaxing.framework.rpc.pipeline;
 
 import com.chinaxing.framework.rpc.DefaultExceptionHandler;
-import com.chinaxing.framework.rpc.model.CallRequestEvent;
-import com.chinaxing.framework.rpc.model.CallResponseEvent;
-import com.chinaxing.framework.rpc.model.EventContext;
-import com.chinaxing.framework.rpc.model.PacketEvent;
+import com.chinaxing.framework.rpc.model.*;
 import com.chinaxing.framework.rpc.protocol.ProtocolHandler;
 import com.chinaxing.framework.rpc.stub.CallerStub;
 import com.chinaxing.framework.rpc.transport.IoEventLoopGroup;
 import com.chinaxing.framework.rpc.transport.LoadBalance;
 import com.chinaxing.framework.rpc.transport.TransportHandler;
-import com.lmax.disruptor.EventFactory;
-import com.lmax.disruptor.EventHandler;
-import com.lmax.disruptor.RingBuffer;
+import com.lmax.disruptor.*;
 import com.lmax.disruptor.dsl.Disruptor;
+import com.lmax.disruptor.dsl.ProducerType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -36,6 +32,7 @@ public class CallerPipeline implements Pipeline<PacketEvent, CallRequestEvent> {
     private final Executor executor;
     private final int capacity;
     private final LoadBalance loadBalance;
+    private final WaitType waitType;
     private Disruptor<CallRequestEvent> callRequestEventDisruptor;
     private Disruptor<PacketEvent> downStreamPacketEventDisruptor;
     private Disruptor<PacketEvent> upStreamPacketEventDisruptor;
@@ -48,10 +45,11 @@ public class CallerPipeline implements Pipeline<PacketEvent, CallRequestEvent> {
     private RingBuffer<PacketEvent> upStreamPacketEventRingBuffer;
     private RingBuffer<CallResponseEvent> callResponseEventRingBuffer;
 
-    public CallerPipeline(Executor executor, IoEventLoopGroup ioEventLoopGroup, int capacity, LoadBalance loadBalance) {
+    public CallerPipeline(Executor executor, WaitType waitType, IoEventLoopGroup ioEventLoopGroup, int capacity, LoadBalance loadBalance) {
         this.executor = executor;
         this.capacity = capacity;
         this.loadBalance = loadBalance;
+        this.waitType = waitType;
         transportHandler = new TransportHandler(this, ioEventLoopGroup, loadBalance);
         init();
     }
@@ -62,29 +60,35 @@ public class CallerPipeline implements Pipeline<PacketEvent, CallRequestEvent> {
 
 
     private void init() {
+        /**
+         * 请求
+         */
         callRequestEventDisruptor = new Disruptor<CallRequestEvent>(new EventFactory<CallRequestEvent>() {
             public CallRequestEvent newInstance() {
                 return new CallRequestEvent();
             }
-        }, capacity, executor);
+        }, capacity, executor, ProducerType.MULTI, getWaitStrategy());
 
         downStreamPacketEventDisruptor = new Disruptor<PacketEvent>(new EventFactory<PacketEvent>() {
             public PacketEvent newInstance() {
                 return new PacketEvent();
             }
-        }, capacity, executor);
+        }, capacity, executor, ProducerType.SINGLE, getWaitStrategy());
 
+        /**
+         * 响应
+         */
         upStreamPacketEventDisruptor = new Disruptor<PacketEvent>(new EventFactory<PacketEvent>() {
             public PacketEvent newInstance() {
                 return new PacketEvent();
             }
-        }, capacity, executor);
+        }, capacity, executor, ProducerType.MULTI, getWaitStrategy());
 
         callResponseEventDisruptor = new Disruptor<CallResponseEvent>(new EventFactory<CallResponseEvent>() {
             public CallResponseEvent newInstance() {
                 return new CallResponseEvent();
             }
-        }, capacity, executor);
+        }, capacity, executor, ProducerType.MULTI, getWaitStrategy());
 
 
         callRequestEventDisruptor.handleExceptionsWith(new DefaultExceptionHandler<CallRequestEvent>(callRequestEventDisruptor));
@@ -191,7 +195,6 @@ public class CallerPipeline implements Pipeline<PacketEvent, CallRequestEvent> {
                 stub.response(event);
             }
         });
-
     }
 
     public void start() throws IOException {
@@ -222,5 +225,21 @@ public class CallerPipeline implements Pipeline<PacketEvent, CallRequestEvent> {
             return;
         }
         logger.error("invalid event type : {}", eventContext.getEvent().getClass().getName());
+    }
+
+    private WaitStrategy getWaitStrategy() {
+        switch (waitType) {
+            case BLOCK:
+                return new BlockingWaitStrategy();
+            case YIELD:
+                return new YieldingWaitStrategy();
+            case LITE_BLOCK:
+                return new LiteBlockingWaitStrategy();
+            case SLEEP:
+                return new SleepingWaitStrategy();
+            case SPIN:
+                return new BusySpinWaitStrategy();
+        }
+        return new LiteBlockingWaitStrategy();
     }
 }
