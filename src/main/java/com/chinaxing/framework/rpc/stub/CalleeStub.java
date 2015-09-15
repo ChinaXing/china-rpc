@@ -69,26 +69,31 @@ public class CalleeStub {
             return;
         }
         Object invoked = exportMap.get(clz);
-        EventContext<CallResponseEvent> ev = pipeline.down();
-        CallResponseEvent e = ev.getEvent();
-        e.setDestination(event.getDestination());
-        e.setId(event.getId());
+
         if (invoked == null) {
-            e.setValue(new Exception("Remote Service Not Found ! :" + clz.getName()));
-            pipeline.publish(ev);
+            Exception e = new Exception("Remote Service Not Found ! :" + clz.getName());
+            doPublish(event.getDestination(), event.getId(), null, e);
             return;
         }
         Method m = event.getMethod();
         Object[] argument = event.getArguments();
         try {
             Object result = m.invoke(invoked, argument);
-            e.setValue(result);
+            doPublish(event.getDestination(), event.getId(), result, null);
         } catch (InvocationTargetException ex) {
-            e.setValue(null);
-            e.setException(ex.getTargetException());
-        } catch (Exception x) {
-            e.setException(x);
+            doPublish(event.getDestination(), event.getId(), null, ex.getTargetException());
+        } catch (Throwable x) {
+            doPublish(event.getDestination(), event.getId(), null, x);
         }
+    }
+
+    private void doPublish(String destination, int id, Object value, Throwable t) {
+        EventContext<CallResponseEvent> ev = pipeline.down();
+        CallResponseEvent e = ev.getEvent();
+        e.setDestination(destination);
+        e.setId(id);
+        e.setValue(value);
+        e.setException(t);
         pipeline.publish(ev);
     }
 }
