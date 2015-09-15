@@ -94,7 +94,7 @@ public class ChinaRPC {
         private LoadBalance loadBalance = new RRLoadBalance();
         private int ioEventLoopCount = Runtime.getRuntime().availableProcessors() * 2 - 1;
         private int callExecutorCount = 8;
-        private WaitType waitType = WaitType.YIELD;
+        private WaitType waitType = WaitType.LITE_BLOCK;
 
         public WaitType getWaitType() {
             return waitType;
