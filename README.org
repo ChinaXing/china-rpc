@@ -42,6 +42,9 @@ make a rpc framework, just with elegant, concise design, extend ability.
 *** 服务代理类
 - 使用JAVAssist 代替JDK proxy
 
+*** 心跳
+- 是否通过维持心跳来减少连接建立和辅助负载均衡
+
 *** LoadBalance
 - RR
 - 权重
