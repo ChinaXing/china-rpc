@@ -211,7 +211,7 @@ public class IOEventLoop implements Runnable {
             start = false;
             for (SelectionKey k : selector.keys()) {
                 k.cancel();
-                ((Connection) k.attachment()).stop();
+                ((Connection) k.attachment()).close();
             }
             if (selector.isOpen())
                 selector.close();
