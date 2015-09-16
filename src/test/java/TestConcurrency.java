@@ -12,8 +12,8 @@ import java.util.concurrent.atomic.AtomicLong;
 public class TestConcurrency extends TestRPC {
     private String s;
     private AtomicLong used = new AtomicLong(0);
-    private static final int CONCURRENCY = 100;
-    private static final int DATA_SIZE = 1024 * 1024;
+    private static final int CONCURRENCY = 1;
+    private static final int DATA_SIZE = 1024 * 1024 * 200;
     private static final AtomicInteger index = new AtomicInteger(0);
 
     @Override

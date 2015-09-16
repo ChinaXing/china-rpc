@@ -42,6 +42,8 @@ public class IOEventLoop implements Runnable {
         connection.getChannel().configureBlocking(false);
         connection.getChannel().setOption(StandardSocketOptions.IP_TOS, 3);
         connection.getChannel().setOption(StandardSocketOptions.TCP_NODELAY, Boolean.TRUE);
+//        connection.getChannel().setOption(StandardSocketOptions.SO_SNDBUF, 1024 * 1024 * 1);
+//        connection.getChannel().setOption(StandardSocketOptions.SO_RCVBUF, 1024 * 1024 * 1);
         connection.setState(READ_SIZE);
         if (selector == null || !selector.isOpen()) buildSelector();
         registerQ.add(connection);
@@ -181,7 +183,7 @@ public class IOEventLoop implements Runnable {
                                             /**
                                              * not write over, listen writable again
                                              */
-                                            k.interestOps(k.interestOps() & ~SelectionKey.OP_WRITE);
+                                            k.interestOps(k.interestOps() | SelectionKey.OP_WRITE);
                                             break;
                                         }
                                         connection.pollData();

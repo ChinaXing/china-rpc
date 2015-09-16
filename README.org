@@ -58,6 +58,7 @@ make a rpc framework, just with elegant, concise design, extend ability.
 *** Transport
 - Buffer 分配采用启发式算法
 - 增加发送重试
+- 网络参数设置——recvBuffer、sendBuffer等参数的设置与是否暴露给用户设置？
 
 *** 序列化
 - 支持没有无参数构造的类——序列化，反序列化

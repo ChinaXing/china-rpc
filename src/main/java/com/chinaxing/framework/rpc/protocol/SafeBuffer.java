@@ -163,17 +163,20 @@ public class SafeBuffer {
     }
 
     public void put(byte[] bs, int from, int len) {
-        int capacity = current.remaining();
-        if (capacity >= len) {
-            current.put(bs, from, len);
-            return;
+        while (true) {
+            int capacity = current.remaining();
+            if (capacity >= len) {
+                current.put(bs, from, len);
+                return;
+            }
+            current.put(bs, from, capacity);
+            current.flip();
+            position += current.limit();
+            buffers.add(current);
+            current = alloc();
+            from += capacity;
+            len -= capacity;
         }
-        current.put(bs, from, capacity);
-        current.flip();
-        position += current.limit();
-        buffers.add(current);
-        current = alloc();
-        put(bs, from + capacity, len - capacity);
     }
 
     public ByteBuffer[] getBuffers() {
@@ -208,21 +211,23 @@ public class SafeBuffer {
     }
 
     public void put(ByteBuffer b) {
-        int rem0 = current.remaining();
-        int rem1 = b.remaining();
-        if (rem0 >= rem1) {
+        while (true) {
+            int rem0 = current.remaining();
+            int rem1 = b.remaining();
+            if (rem0 >= rem1) {
+                current.put(b);
+                return;
+            }
+            int limit = b.limit();
+            b.limit(rem0 + b.position());
             current.put(b);
-            return;
+            b.limit(limit);
+            current.flip();
+            position += current.limit();
+            buffers.add(current);
+            current = alloc();
+            put(b);
         }
-        int limit = b.limit();
-        b.limit(rem0 + b.position());
-        current.put(b);
-        b.limit(limit);
-        current.flip();
-        position += current.limit();
-        buffers.add(current);
-        current = alloc();
-        put(b);
     }
 
     public boolean hasRemaining() {

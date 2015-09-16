@@ -14,7 +14,7 @@ public abstract class TestRPC {
         rpc = ChinaRPC.getBuilder().setTimeout(60000)
                 .setCallExecutorCount(200)
                 .setIoEventLoopCount(1)
-                .setWaitType(WaitType.LITE_BLOCK)
+                .setWaitType(WaitType.YIELD)
                 .build();
     }
 
