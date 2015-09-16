@@ -58,31 +58,11 @@ public class CallerStub {
      * @return 服务类型的一个实例
      */
     public synchronized <T> T refer(final Class<T> service) {
-        Object proxy = proxyCache.get(service);
-        if (proxy != null) return (T) proxy;
-        proxy = Proxy.newProxyInstance(this.getClass().getClassLoader(), new Class[]{service}, new InvocationHandler() {
-            public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
-                EventContext<CallRequestEvent> ev = callerPipeline.down();
-                CallRequestEvent ce = ev.getEvent();
-                ce.setClz(service);
-                ce.setMethod(method);
-                ce.setArguments(args == null ? new Object[]{} : args);
-                int idx = index.getAndIncrement();
-                ce.setId(idx);
-                ce.setAvailableDestinations(serviceProvider.getProvider(service.getName()));
-                RemoteCallPromise promise = new RemoteCallPromise();
-                promiseMap.put(idx, promise);
-                callerPipeline.publish(ev);
-                Object r = promise.get(timeout, TimeUnit.MILLISECONDS);
-                promiseMap.remove(idx);
-                if (r instanceof Throwable) {
-                    throw (Throwable) r;
-                }
-                return r;
-            }
-        });
+        T proxy = (T) proxyCache.get(service);
+        if (proxy != null) return proxy;
+        proxy = buildProxy(service, null);
         proxyCache.put(service, proxy);
-        return (T) proxy;
+        return proxy;
     }
 
     /**
@@ -96,9 +76,17 @@ public class CallerStub {
      * @return
      */
     public synchronized <T> T refer(final Class<T> service, final String address) {
-        Object proxy = uniqueProxyCache.get(service.getName() + "#" + address);
-        if (proxy != null) return (T) proxy;
-        proxy = Proxy.newProxyInstance(this.getClass().getClassLoader(), new Class[]{service}, new InvocationHandler() {
+        @SuppressWarnings("unchecked")
+        T proxy = (T) uniqueProxyCache.get(service.getName() + "#" + address);
+        if (proxy != null) return proxy;
+        proxy = buildProxy(service, address);
+        uniqueProxyCache.put(service.getName() + "#" + address, proxy);
+        return proxy;
+    }
+
+    @SuppressWarnings("unchecked")
+    private <T> T buildProxy(final Class<T> service, final String address) {
+        return (T) Proxy.newProxyInstance(this.getClass().getClassLoader(), new Class[]{service}, new InvocationHandler() {
             public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
                 EventContext<CallRequestEvent> ev = callerPipeline.down();
                 CallRequestEvent ce = ev.getEvent();
@@ -107,7 +95,11 @@ public class CallerStub {
                 ce.setArguments(args == null ? new Object[]{} : args);
                 int idx = index.getAndIncrement();
                 ce.setId(idx);
-                ce.setDestination(address);
+                if (address == null) {
+                    ce.setAvailableDestinations(serviceProvider.getProvider(service.getName()));
+                } else {
+                    ce.setDestination(address);
+                }
                 RemoteCallPromise promise = new RemoteCallPromise();
                 promiseMap.put(idx, promise);
                 callerPipeline.publish(ev);
@@ -125,8 +117,6 @@ public class CallerStub {
                 return r;
             }
         });
-        uniqueProxyCache.put(service.getName() + "#" + address, proxy);
-        return (T) proxy;
     }
 
     public synchronized <T> BroadCastReferWrapper<T> broadCastRefer(Class<T> service) {

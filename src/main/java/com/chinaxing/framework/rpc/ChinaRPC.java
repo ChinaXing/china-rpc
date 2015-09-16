@@ -69,7 +69,7 @@ public class ChinaRPC {
     private CallerStub callerStub() throws IOException {
         if (callerStub == null) {
             IoEventLoopGroup ioEventLoopGroup = new IoEventLoopGroup(ioEventLoopCount, buildExecutor(ioEventLoopCount, "CallerIo"));
-            CallerPipeline callerPipeline = new CallerPipeline(buildExecutor(callExecutorCount, "CallerExec"), waitType, ioEventLoopGroup, 1024, loadBalance);
+            CallerPipeline callerPipeline = new CallerPipeline(buildExecutor(4, "CallerExec"), waitType, ioEventLoopGroup, 1024, loadBalance);
             callerStub = new CallerStub(provider, callerPipeline, timeout);
             callerPipeline.setStub(callerStub);
             callerPipeline.start();

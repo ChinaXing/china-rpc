@@ -11,9 +11,9 @@ public abstract class TestRPC {
 
     @Before
     public void testAppointCall() throws Throwable {
-        rpc = ChinaRPC.getBuilder().setTimeout(300000)
-                .setCallExecutorCount(10)
-                .setIoEventLoopCount(4)
+        rpc = ChinaRPC.getBuilder().setTimeout(60000)
+                .setCallExecutorCount(200)
+                .setIoEventLoopCount(1)
                 .setWaitType(WaitType.LITE_BLOCK)
                 .build();
     }

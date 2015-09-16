@@ -136,8 +136,9 @@ public class IOEventLoop implements Runnable {
                                     case READ_DATA: {
                                         SafeBuffer buffer = connection.getBuffer();
                                         int c = channel.read(buffer.getWrite());
-                                        if (c < 0) {// channel is close by other side
-                                            return;
+                                        if (c < 0) {
+                                            connection.close();
+                                            continue SELECT_KEY;
                                         }
                                         if (c == 0) break DO_READ;
                                         /**
@@ -173,9 +174,8 @@ public class IOEventLoop implements Runnable {
                                     try {
                                         int c = channel.write(buffer);
                                         if (c < 0) {
-                                            cancel(connection.getChannel());
                                             connection.close();
-                                            break;
+                                            continue SELECT_KEY;
                                         }
                                         if (c == 0) {
                                             /**
@@ -187,7 +187,7 @@ public class IOEventLoop implements Runnable {
                                         connection.pollData();
                                     } catch (NotYetConnectedException e) {
                                         connection.close();
-                                        break;
+                                        continue SELECT_KEY;
                                     }
                                 } else {
                                     break;
