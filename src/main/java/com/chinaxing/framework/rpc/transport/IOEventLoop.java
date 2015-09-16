@@ -229,13 +229,8 @@ public class IOEventLoop implements Runnable {
     public void wakeUpWrite(SocketChannel channel) {
         SelectionKey k = channel.keyFor(selector);
         if (k != null) {
-            if (!((k.interestOps() & SelectionKey.OP_WRITE) == SelectionKey.OP_WRITE)) {
+            if ((k.interestOps() & SelectionKey.OP_WRITE) == 0) {
                 k.interestOps(k.interestOps() | SelectionKey.OP_WRITE);
-                try {
-                    selector.selectNow();
-                } catch (IOException e) {
-                    logger.error("", e);
-                }
             }
             selector.wakeup();
         }
