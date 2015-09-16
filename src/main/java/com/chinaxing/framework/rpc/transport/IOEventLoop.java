@@ -230,7 +230,7 @@ public class IOEventLoop implements Runnable {
         SelectionKey k = channel.keyFor(selector);
         if (k != null) {
             if (!((k.interestOps() & SelectionKey.OP_WRITE) == SelectionKey.OP_WRITE)) {
-                k.interestOps(k.interestOps() & SelectionKey.OP_WRITE);
+                k.interestOps(k.interestOps() | SelectionKey.OP_WRITE);
                 try {
                     selector.selectNow();
                 } catch (IOException e) {
