@@ -161,6 +161,10 @@ public class IOEventLoop implements Runnable {
                             }
                         }
                         if (k.isWritable()) {
+                            /**
+                             * clear write writable listener
+                             */
+                            k.interestOps(k.interestOps() & ~SelectionKey.OP_WRITE);
                             SocketChannel channel = (SocketChannel) k.channel();
                             Connection connection = (Connection) k.attachment();
                             if (connection == null) {
@@ -177,7 +181,13 @@ public class IOEventLoop implements Runnable {
                                             connection.close();
                                             break;
                                         }
-                                        if (c == 0) break;
+                                        if (c == 0) {
+                                            /**
+                                             * not write over, listen writable again
+                                             */
+                                            k.interestOps(k.interestOps() & ~SelectionKey.OP_WRITE);
+                                            break;
+                                        }
                                         connection.pollData();
                                     } catch (NotYetConnectedException e) {
                                         connection.close();
@@ -216,7 +226,18 @@ public class IOEventLoop implements Runnable {
         }
     }
 
-    public void wakeup() {
-        selector.wakeup();
+    public void wakeUpWrite(SocketChannel channel) {
+        SelectionKey k = channel.keyFor(selector);
+        if (k != null) {
+            if (!((k.interestOps() & SelectionKey.OP_WRITE) == SelectionKey.OP_WRITE)) {
+                k.interestOps(k.interestOps() & SelectionKey.OP_WRITE);
+                try {
+                    selector.selectNow();
+                } catch (IOException e) {
+                    logger.error("", e);
+                }
+            }
+            selector.wakeup();
+        }
     }
 }

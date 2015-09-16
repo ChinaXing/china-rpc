@@ -128,7 +128,7 @@ public class Connection {
 
     public void send(SafeBuffer buffer) throws Throwable {
         Q.addAll(Arrays.asList(buffer.getBuffers()));
-        ioEventLoop.wakeup();
+        ioEventLoop.wakeUpWrite(channel);
     }
 
     public void handle() {
