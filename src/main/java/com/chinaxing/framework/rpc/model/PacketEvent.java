@@ -2,7 +2,6 @@ package com.chinaxing.framework.rpc.model;
 
 import com.chinaxing.framework.rpc.protocol.SafeBuffer;
 
-import java.nio.ByteBuffer;
 import java.util.List;
 
 /**
@@ -15,10 +14,6 @@ public class PacketEvent {
     private Throwable exception;
     private SafeBuffer buffer;
     private int id = -1;
-
-    public void setId(int id) {
-        this.id = id;
-    }
 
     public List<String> getAvailableDestinations() {
         return availableDestinations;
@@ -54,5 +49,9 @@ public class PacketEvent {
 
     public int getId() {
         return id;
+    }
+
+    public void setId(int id) {
+        this.id = id;
     }
 }

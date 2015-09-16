@@ -1,11 +1,7 @@
 import com.chinaxing.framework.rpc.ChinaRPC;
 import com.chinaxing.framework.rpc.model.WaitType;
-import impl.ArrayServiceImpl;
 import org.junit.Before;
 import org.junit.Test;
-import service.ArrayService;
-
-import java.util.concurrent.Executors;
 
 /**
  * Created by LambdaCat on 15/8/21.

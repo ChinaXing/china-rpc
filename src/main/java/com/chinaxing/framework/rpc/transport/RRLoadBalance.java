@@ -13,12 +13,12 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 public class RRLoadBalance implements LoadBalance {
     private static final Logger logger = LoggerFactory.getLogger(RRLoadBalance.class);
+    private static final int RR_STICK = 10;
+    private static final int MAX_RETRY = 3;
     private final AtomicInteger index = new AtomicInteger(0);
     private final Map<String, Integer> providerInfo = new HashMap<String, Integer>();
     private String current;
     private int count = 0;
-    private static final int RR_STICK = 10;
-    private static final int MAX_RETRY = 3;
     private ConnectionManager connectionManager;
 
     public void setConnectionManager(ConnectionManager connectionManager) {

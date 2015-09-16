@@ -1,7 +1,6 @@
 package com.chinaxing.framework.rpc.pipeline;
 
 import com.chinaxing.framework.rpc.model.EventContext;
-import com.chinaxing.framework.rpc.model.PacketEvent;
 
 /**
  * Created by LambdaCat on 15/8/24.

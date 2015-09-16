@@ -3,15 +3,11 @@ package com.chinaxing.framework.rpc.transport;
 import com.chinaxing.framework.rpc.protocol.SafeBuffer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import sun.io.ByteToCharUnicodeBigUnmarked;
 
-import java.io.IOException;
-import java.net.SocketOption;
 import java.net.StandardSocketOptions;
 import java.nio.ByteBuffer;
 import java.nio.channels.*;
 import java.util.Iterator;
-import java.util.Set;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.Executor;
 
@@ -20,11 +16,11 @@ import java.util.concurrent.Executor;
  */
 public class IOEventLoop implements Runnable {
     private static final Logger logger = LoggerFactory.getLogger(IOEventLoop.class);
+    private static final int READ_SIZE = 1;
+    private static final int READ_DATA = 2;
     private Selector selector;
     private volatile boolean start = false;
     private Executor executor;
-    private static final int READ_SIZE = 1;
-    private static final int READ_DATA = 2;
     private ConcurrentLinkedQueue<Connection> registerQ = new ConcurrentLinkedQueue<Connection>();
 
     public IOEventLoop(Executor executor) {

@@ -4,9 +4,10 @@ import com.chinaxing.framework.rpc.exception.SerializeException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.lang.reflect.*;
-import java.text.DateFormat;
-import java.text.SimpleDateFormat;
+import java.lang.reflect.Array;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
 import java.util.*;
 
 /**
@@ -38,16 +39,6 @@ public class ChinaSerialize {
         }
         for (Class c : classIndex) {
             primitiveClass.put(c.getName(), c);
-        }
-    }
-
-    public final static class DeSerializeResult {
-        String name;
-        Object value;
-
-        public DeSerializeResult(String name, Object value) {
-            this.name = name;
-            this.value = value;
         }
     }
 
@@ -487,6 +478,16 @@ public class ChinaSerialize {
             buffer.clear();
         } catch (Throwable e) {
             e.printStackTrace();
+        }
+    }
+
+    public final static class DeSerializeResult {
+        String name;
+        Object value;
+
+        public DeSerializeResult(String name, Object value) {
+            this.name = name;
+            this.value = value;
         }
     }
 }

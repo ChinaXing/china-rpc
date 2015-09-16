@@ -15,7 +15,6 @@ import java.io.IOException;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -53,6 +52,10 @@ public class ChinaRPC {
         this.callExecutorCount = callExecutorCount;
     }
 
+    public static ChinaRPCBuilder getBuilder() {
+        return new ChinaRPCBuilder();
+    }
+
     private Executor buildExecutor(int count, final String name) {
         return Executors.newFixedThreadPool(count, new ThreadFactory() {
             private final AtomicInteger index = new AtomicInteger(0);
@@ -86,6 +89,27 @@ public class ChinaRPC {
         return calleeStub;
     }
 
+    public <T> T refer(Class<T> cls) throws IOException {
+        return callerStub().refer(cls);
+
+    }
+
+    public <T> void export(T instance) throws IOException {
+        calleeStub().export(instance);
+    }
+
+    /**
+     * 指定地址的调用
+     *
+     * @param cls
+     * @param address
+     * @param <T>
+     * @return
+     */
+    public <T> T appointRefer(Class<T> cls, String address) throws IOException {
+        return callerStub().refer(cls, address);
+    }
+
     public static class ChinaRPCBuilder {
         private ServiceProvider serviceProvider = new StaticServiceProvider();
         private long timeout = 5000;
@@ -96,6 +120,9 @@ public class ChinaRPC {
         private int callExecutorCount = 8;
         private WaitType waitType = WaitType.LITE_BLOCK;
 
+        private ChinaRPCBuilder() {
+        }
+
         public WaitType getWaitType() {
             return waitType;
         }
@@ -103,9 +130,6 @@ public class ChinaRPC {
         public ChinaRPCBuilder setWaitType(WaitType waitType) {
             this.waitType = waitType;
             return this;
-        }
-
-        private ChinaRPCBuilder() {
         }
 
         public ChinaRPCBuilder setIoEventLoopCount(int ioEventLoopCount) {
@@ -172,30 +196,5 @@ public class ChinaRPC {
             this.callExecutorCount = callExecutorCount;
             return this;
         }
-    }
-
-    public static ChinaRPCBuilder getBuilder() {
-        return new ChinaRPCBuilder();
-    }
-
-    public <T> T refer(Class<T> cls) throws IOException {
-        return callerStub().refer(cls);
-
-    }
-
-    public <T> void export(T instance) throws IOException {
-        calleeStub().export(instance);
-    }
-
-    /**
-     * 指定地址的调用
-     *
-     * @param cls
-     * @param address
-     * @param <T>
-     * @return
-     */
-    public <T> T appointRefer(Class<T> cls, String address) throws IOException {
-        return callerStub().refer(cls, address);
     }
 }

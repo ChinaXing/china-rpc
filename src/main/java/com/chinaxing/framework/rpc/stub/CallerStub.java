@@ -30,11 +30,11 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class CallerStub {
     private static final Logger logger = LoggerFactory.getLogger(CallerStub.class);
     private final AtomicInteger index = new AtomicInteger(0);
-    private ServiceProvider serviceProvider;
     private final Map<Class, Object> proxyCache = new HashMap<Class, Object>();
     private final Map<String, Object> uniqueProxyCache = new HashMap<String, Object>();
-    private CallerPipeline callerPipeline;
     private final ConcurrentHashMap<Integer, RemoteCallPromise> promiseMap = new ConcurrentHashMap<Integer, RemoteCallPromise>();
+    private ServiceProvider serviceProvider;
+    private CallerPipeline callerPipeline;
     private long timeout = 3000;
 
     public CallerStub(ServiceProvider serviceProvider, CallerPipeline callerPipeline) {

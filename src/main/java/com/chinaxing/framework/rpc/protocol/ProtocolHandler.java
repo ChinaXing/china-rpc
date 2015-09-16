@@ -2,14 +2,11 @@ package com.chinaxing.framework.rpc.protocol;
 
 import com.chinaxing.framework.rpc.model.CallRequestEvent;
 import com.chinaxing.framework.rpc.model.CallResponseEvent;
-import com.chinaxing.framework.rpc.model.EventContext;
 import com.chinaxing.framework.rpc.model.PacketEvent;
-import com.chinaxing.framework.rpc.pipeline.Pipeline;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.lang.reflect.Method;
-import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -34,6 +31,12 @@ public class ProtocolHandler {
         primitiveClassNameMap.put("char", char.class);
         primitiveClassNameMap.put("byte", byte.class);
         primitiveClassNameMap.put("boolean", boolean.class);
+    }
+
+    private static Class getClass(String name) throws ClassNotFoundException {
+        Class c = primitiveClassNameMap.get(name);
+        if (c != null) return c;
+        return Class.forName(name);
     }
 
     public void handleCallerDownStream(CallRequestEvent requestEvent, PacketEvent event) throws Throwable {
@@ -124,11 +127,5 @@ public class ProtocolHandler {
             args[i] = dr.value;
         }
         requestEvent.setArguments(args);
-    }
-
-    private static Class getClass(String name) throws ClassNotFoundException {
-        Class c = primitiveClassNameMap.get(name);
-        if (c != null) return c;
-        return Class.forName(name);
     }
 }

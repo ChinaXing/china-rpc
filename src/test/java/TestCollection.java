@@ -1,8 +1,6 @@
 import impl.CollectionServiceImpl;
-import impl.ExceptionServiceImpl;
 import model.PlainPojo;
 import service.CollectionService;
-import service.ExceptionService;
 
 import java.util.HashSet;
 import java.util.Set;

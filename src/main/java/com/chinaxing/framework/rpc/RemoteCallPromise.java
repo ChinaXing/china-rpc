@@ -25,6 +25,10 @@ public class RemoteCallPromise<V> implements Promise<V> {
         latch.countDown();
     }
 
+    public boolean isException() {
+        return isException;
+    }
+
     public void setException(Throwable t) {
         isFailure = true;
         isException = true;
@@ -32,18 +36,8 @@ public class RemoteCallPromise<V> implements Promise<V> {
         latch.countDown();
     }
 
-    public boolean isException() {
-        return isException;
-    }
-
     public Throwable getCause() {
         return cause;
-    }
-
-    public void setFailure(String reason) {
-        isFailure = true;
-        this.reason = reason;
-        latch.countDown();
     }
 
     public boolean cancel(boolean mayInterruptIfRunning) {
@@ -84,6 +78,12 @@ public class RemoteCallPromise<V> implements Promise<V> {
 
     public boolean isFailure() {
         return isFailure;
+    }
+
+    public void setFailure(String reason) {
+        isFailure = true;
+        this.reason = reason;
+        latch.countDown();
     }
 
     public String getReason() {

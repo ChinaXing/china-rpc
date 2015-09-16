@@ -11,6 +11,14 @@ public class PlainPojo {
     private int a = 20;
     private Date d;
 
+    public PlainPojo() {
+    }
+
+    public PlainPojo(boolean ok, String msg) {
+        this.ok = ok;
+        this.msg = msg;
+    }
+
     public boolean isOk() {
         return ok;
     }
@@ -41,14 +49,6 @@ public class PlainPojo {
 
     public void setD(Date d) {
         this.d = d;
-    }
-
-    public PlainPojo() {
-    }
-
-    public PlainPojo(boolean ok, String msg) {
-        this.ok = ok;
-        this.msg = msg;
     }
 
     @Override

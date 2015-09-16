@@ -15,7 +15,10 @@ import java.nio.channels.Selector;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
 import java.util.Set;
-import java.util.concurrent.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -35,6 +38,8 @@ public class TransportHandler {
     private LoadBalance loadBalance;
     private ConnectionManager connectionManager;
     private IoEventLoopGroup ioEventLoopGroup;
+    private ConcurrentHashMap<String, LinkedBlockingQueue<ByteBuffer>> sendQueue =
+            new ConcurrentHashMap<String, LinkedBlockingQueue<ByteBuffer>>();
 
     public TransportHandler(Pipeline pipeline, IoEventLoopGroup ioEventLoopGroup, LoadBalance loadBalance) {
         this.pipeline = pipeline;
@@ -128,9 +133,6 @@ public class TransportHandler {
         this.loadBalance = loadBalance;
         started = true;
     }
-
-    private ConcurrentHashMap<String, LinkedBlockingQueue<ByteBuffer>> sendQueue =
-            new ConcurrentHashMap<String, LinkedBlockingQueue<ByteBuffer>>();
 
     public void receive(String destination, SafeBuffer buffer) {
         try {

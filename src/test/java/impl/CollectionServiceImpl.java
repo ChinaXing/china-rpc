@@ -1,6 +1,5 @@
 package impl;
 
-import com.chinaxing.framework.rpc.DefaultExceptionHandler;
 import model.PlainPojo;
 import service.CollectionService;
 

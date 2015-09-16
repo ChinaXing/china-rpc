@@ -3,15 +3,11 @@ package com.chinaxing.framework.rpc.transport;
 import com.chinaxing.framework.rpc.protocol.SafeBuffer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import sun.io.ByteToCharUnicodeBigUnmarked;
 
-import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
-import java.nio.channels.*;
+import java.nio.channels.SocketChannel;
 import java.util.Arrays;
-import java.util.Set;
-import java.util.concurrent.Executor;
 import java.util.concurrent.LinkedBlockingQueue;
 
 /**
@@ -22,6 +18,7 @@ import java.util.concurrent.LinkedBlockingQueue;
 public class Connection {
     private static final Logger logger = LoggerFactory.getLogger(Connection.class);
     private final IOEventLoop ioEventLoop;
+    private final ByteBuffer lBuf = ByteBuffer.allocate(16);
     private String destination;
     private String host;
     private int port;
@@ -30,28 +27,7 @@ public class Connection {
     private ConnectionHandler handler;
     private volatile boolean start = false;
     private SafeBuffer buffer;
-    private final ByteBuffer lBuf = ByteBuffer.allocate(16);
     private volatile int state;
-
-    public int getState() {
-        return state;
-    }
-
-    public SafeBuffer getBuffer() {
-        return buffer;
-    }
-
-    public ByteBuffer getlBuf() {
-        return lBuf;
-    }
-
-    public void setBuffer(SafeBuffer buffer) {
-        this.buffer = buffer;
-    }
-
-    public void setState(int state) {
-        this.state = state;
-    }
 
     public Connection(String destination, ConnectionHandler handler, IOEventLoop ioEventLoop) {
         this.destination = destination;
@@ -60,6 +36,26 @@ public class Connection {
         this.port = Integer.valueOf(a[1]);
         this.handler = handler;
         this.ioEventLoop = ioEventLoop;
+    }
+
+    public int getState() {
+        return state;
+    }
+
+    public void setState(int state) {
+        this.state = state;
+    }
+
+    public SafeBuffer getBuffer() {
+        return buffer;
+    }
+
+    public void setBuffer(SafeBuffer buffer) {
+        this.buffer = buffer;
+    }
+
+    public ByteBuffer getlBuf() {
+        return lBuf;
     }
 
     public synchronized void start() throws Throwable {
@@ -111,6 +107,10 @@ public class Connection {
         return channel;
     }
 
+    public void setChannel(SocketChannel channel) {
+        this.channel = channel;
+    }
+
     public synchronized void close() {
         start = false;
         try {
@@ -143,9 +143,5 @@ public class Connection {
 
     public ByteBuffer peekData() {
         return Q.peek();
-    }
-
-    public void setChannel(SocketChannel channel) {
-        this.channel = channel;
     }
 }

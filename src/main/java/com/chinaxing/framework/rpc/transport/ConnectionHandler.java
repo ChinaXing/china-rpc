@@ -2,8 +2,6 @@ package com.chinaxing.framework.rpc.transport;
 
 import com.chinaxing.framework.rpc.protocol.SafeBuffer;
 
-import java.nio.ByteBuffer;
-
 /**
  * Created by LambdaCat on 15/9/12.
  */

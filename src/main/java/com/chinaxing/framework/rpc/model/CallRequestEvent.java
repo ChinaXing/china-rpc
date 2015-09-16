@@ -16,16 +16,12 @@ public class CallRequestEvent {
 
     private Throwable exception;
 
-    public void setException(Throwable exception) {
-        this.exception = exception;
-    }
-
     public Throwable getException() {
         return exception;
     }
 
-    public void setAvailableDestinations(List<String> availableDestinations) {
-        this.availableDestinations = availableDestinations;
+    public void setException(Throwable exception) {
+        this.exception = exception;
     }
 
     public String getDestination() {
@@ -70,5 +66,9 @@ public class CallRequestEvent {
 
     public List<String> getAvailableDestinations() {
         return availableDestinations;
+    }
+
+    public void setAvailableDestinations(List<String> availableDestinations) {
+        this.availableDestinations = availableDestinations;
     }
 }

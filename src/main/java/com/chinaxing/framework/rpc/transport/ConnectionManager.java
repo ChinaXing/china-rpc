@@ -6,9 +6,7 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.channels.SocketChannel;
-import java.rmi.server.ExportException;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.Executor;
 
 /**
  * 连接管理器
@@ -17,10 +15,9 @@ import java.util.concurrent.Executor;
  * Created by LambdaCat on 15/8/24.
  */
 public class ConnectionManager {
+    private static final Logger logger = LoggerFactory.getLogger(ConnectionManager.class);
     private final ConcurrentHashMap<String, Connection> channelMap =
             new ConcurrentHashMap<String, Connection>();
-    private static final Logger logger = LoggerFactory.getLogger(ConnectionManager.class);
-
     private IoEventLoopGroup ioEventLoopGroup;
     private ConnectionHandler connectionHandler;
 

@@ -8,8 +8,8 @@ import java.util.concurrent.atomic.AtomicInteger;
  * Created by LambdaCat on 15/9/12.
  */
 public class IoEventLoopGroup {
-    private IOEventLoop[] eventLoops;
     private final int size;
+    private IOEventLoop[] eventLoops;
     private AtomicInteger index = new AtomicInteger(0);
 
     public IoEventLoopGroup(int size, Executor executor) {

@@ -21,9 +21,9 @@ import java.util.List;
  */
 public class SafeBuffer {
     private final int size;
-    private int position = 0;
     List<ByteBuffer> buffers = new ArrayList<ByteBuffer>();
     ByteBuffer current;
+    private int position = 0;
 
     public SafeBuffer(int size) {
         this.size = size;
